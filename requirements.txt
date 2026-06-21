@@ -1,0 +1,21 @@
+# ============================================================================
+# Requirements for EcoFlow Data Tracker
+# ============================================================================
+# 
+# Installation: pip install -r requirements.txt
+#
+
+# HTTP Requests (für EcoFlow API)
+requests==2.31.0
+
+# Standard Library wird auch verwendet:
+# - csv (eingebaut)
+# - os (eingebaut)
+# - sys (eingebaut)
+# - time (eingebaut)
+# - hashlib (eingebaut)
+# - hmac (eingebaut)
+# - datetime (eingebaut)
+# - pathlib (eingebaut)
+
+# Hinweis: Keine weiteren Libraries nötig für die Basis-Funktionalität!

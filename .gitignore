@@ -1,0 +1,55 @@
+# ============================================================================
+# .gitignore - Dateien die NICHT in Git gepusht werden sollen
+# ============================================================================
+
+# CSV Datendateien (lokal)
+ecoflow_energie_daten.csv
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environments
+venv/
+ENV/
+env/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Local Secrets (falls versehentlich erstellt)
+.env
+.env.local
+secrets.json
+
+# Logs
+*.log
+
+# ============================================================================
+# HINWEIS: Deine API-Keys gehören NICHT in dieses Repository!
+# Sie sind GitHub Secrets, nicht in Code/Dateien!
+# ============================================================================
