@@ -1,19 +1,7 @@
 #!/usr/bin/env python3
 """
-=============================================================================
 EcoFlow PowerStream & Delta 3 Datentracker - GitHub Actions Version
-=============================================================================
-
-Purpose:
-    - Abfrage von EcoFlow Geräten via offizielle Cloud REST-API
-    - Speicherung in CSV mit Zeitstempel
-    - Automatische Energieerzeugung-Berechnung (Wh aus W)
-    - Optimiert für GitHub Actions (Environment Variables für Keys)
-
-Author: KI-Assistent
-Version: 1.0 GitHub Actions Edition
-Environment: GitHub Actions Ubuntu
-=============================================================================
+Verwendet EcoFlow Open Platform API v2 (iot-open/sign/...)
 """
 
 import requests
@@ -23,308 +11,276 @@ import sys
 import time
 import hashlib
 import hmac
+import random
+import string
 from datetime import datetime
-from pathlib import Path
 
 # =============================================================================
-# KONFIGURATION: KEYS AUS ENVIRONMENT VARIABLES (GitHub Secrets)
+# KONFIGURATION
 # =============================================================================
 
-# Diese Werte werden als GitHub Secrets gespeichert und hier ausgelesen
 ECOFLOW_ACCESS_KEY = os.environ.get("ECOFLOW_ACCESS_KEY", "")
 ECOFLOW_SECRET_KEY = os.environ.get("ECOFLOW_SECRET_KEY", "")
 POWERSTREAM_SN = os.environ.get("POWERSTREAM_SN", "")
 DELTA3_SN = os.environ.get("DELTA3_SN", "")
 
-# API Endpoints
-ECOFLOW_API_BASE = "https://api.ecoflow.com/api"
-POWERSTREAM_ENDPOINT = f"{ECOFLOW_API_BASE}/device/QueryDeviceStatus?sn={POWERSTREAM_SN}"
-DELTA3_ENDPOINT = f"{ECOFLOW_API_BASE}/device/QueryDeviceStatus?sn={DELTA3_SN}"
-
-# Datei-Konfiguration
+ECOFLOW_API_BASE = "https://api.ecoflow.com"
 CSV_FILENAME = "ecoflow_energie_daten.csv"
 CSV_FIELDNAMES = [
-    "timestamp",
-    "pv1_watt",
-    "pv2_watt",
-    "ac_house_watt",
-    "battery_soc_percent",
-    "battery_power_watt",
-    "total_pv_wh_daily"
+    "timestamp", "pv1_watt", "pv2_watt", "ac_house_watt",
+    "battery_soc_percent", "battery_power_watt", "total_pv_wh_daily"
 ]
 
 # =============================================================================
-# LOGGING (für GitHub Actions Console Output)
+# LOGGING
 # =============================================================================
 
-def log_message(level: str, message: str):
-    """
-    Gibt Log-Meldung in Console aus (für GitHub Actions sichtbar)
-    """
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    log_entry = f"[{timestamp}] {level}: {message}"
-    print(log_entry)
+def log(level, message):
+    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {level}: {message}")
 
 # =============================================================================
-# VALIDIERUNG: SIND ALLE ENVIRONMENT VARIABLES GESETZT?
+# VALIDIERUNG
 # =============================================================================
 
 def validate_config():
-    """Prüft ob alle benötigten Umgebungsvariablen gesetzt sind"""
-    
-    errors = []
-    
-    if not ECOFLOW_ACCESS_KEY:
-        errors.append("❌ ECOFLOW_ACCESS_KEY nicht gesetzt (GitHub Secret fehlt)")
-    
-    if not ECOFLOW_SECRET_KEY:
-        errors.append("❌ ECOFLOW_SECRET_KEY nicht gesetzt (GitHub Secret fehlt)")
-    
-    if not POWERSTREAM_SN:
-        errors.append("❌ POWERSTREAM_SN nicht gesetzt (GitHub Secret fehlt)")
-    
-    if not DELTA3_SN:
-        errors.append("❌ DELTA3_SN nicht gesetzt (GitHub Secret fehlt)")
-    
-    if errors:
-        log_message("ERROR", "Konfigurationsfehler:")
-        for error in errors:
-            log_message("ERROR", error)
-        log_message("ERROR", "\nBitte GitHub Secrets überprüfen:")
-        log_message("ERROR", "Settings → Secrets and variables → Actions")
+    missing = []
+    if not ECOFLOW_ACCESS_KEY: missing.append("ECOFLOW_ACCESS_KEY")
+    if not ECOFLOW_SECRET_KEY: missing.append("ECOFLOW_SECRET_KEY")
+    if not POWERSTREAM_SN:     missing.append("POWERSTREAM_SN")
+    if not DELTA3_SN:          missing.append("DELTA3_SN")
+    if missing:
+        log("ERROR", f"Fehlende GitHub Secrets: {', '.join(missing)}")
         return False
-    
-    log_message("INFO", "✓ Alle Konfigurationswerte vorhanden")
+    log("INFO", "✓ Alle Secrets vorhanden")
     return True
 
 # =============================================================================
-# EcoFlow API - AUTHENTIFIZIERUNG
+# AUTHENTIFIZIERUNG (EcoFlow Open Platform v2)
 # =============================================================================
 
-def generate_signature(access_key: str, secret_key: str, timestamp: str) -> str:
+def generate_nonce(length=8):
+    return ''.join(random.choices(string.ascii_letters + string.digits, k=length))
+
+def generate_signature(access_key, secret_key, nonce, timestamp, params_str=""):
     """
-    Generiert HMAC-SHA256 Signatur für EcoFlow API
+    EcoFlow Open Platform HMAC-SHA256 Signatur.
+    Format: accessKey={key}&nonce={nonce}&timestamp={ts}&{sorted_query_params}
     """
-    message = f"{access_key}{timestamp}"
-    signature = hmac.new(
-        secret_key.encode(),
-        message.encode(),
+    sign_str = f"accessKey={access_key}&nonce={nonce}&timestamp={timestamp}"
+    if params_str:
+        sign_str += f"&{params_str}"
+    return hmac.new(
+        secret_key.encode("utf-8"),
+        sign_str.encode("utf-8"),
         hashlib.sha256
     ).hexdigest()
-    return signature
 
 # =============================================================================
-# EcoFlow API - DATEN ABRUFEN
+# API ABFRAGE
 # =============================================================================
 
-def query_ecoflow_device(endpoint: str, device_name: str) -> dict:
-    """
-    Fragt EcoFlow API ab
-    """
+def query_device(sn, device_name):
+    """Fragt alle Gerätewerte über EcoFlow Open Platform ab."""
     try:
         timestamp = str(int(time.time() * 1000))
-        signature = generate_signature(ECOFLOW_ACCESS_KEY, ECOFLOW_SECRET_KEY, timestamp)
-        
+        nonce = generate_nonce()
+        params_str = f"sn={sn}"
+        sign = generate_signature(ECOFLOW_ACCESS_KEY, ECOFLOW_SECRET_KEY, nonce, timestamp, params_str)
+
         headers = {
-            "Authorization": f"{ECOFLOW_ACCESS_KEY}:{signature}",
-            "X-Request-Timestamp": timestamp,
-            "Content-Type": "application/json"
+            "accessKey": ECOFLOW_ACCESS_KEY,
+            "timestamp": timestamp,
+            "nonce": nonce,
+            "sign": sign,
+            "Content-Type": "application/json",
         }
-        
-        log_message("INFO", f"→ Frage {device_name} ab...")
-        response = requests.get(endpoint, headers=headers, timeout=10)
-        
+
+        url = f"{ECOFLOW_API_BASE}/iot-open/sign/device/quota/all?sn={sn}"
+        log("INFO", f"→ Frage {device_name} ab ({sn})")
+
+        response = requests.get(url, headers=headers, timeout=15)
+        log("INFO", f"HTTP Status: {response.status_code}")
+
         if response.status_code == 200:
             data = response.json()
-            if data.get("code") == 0:
-                log_message("INFO", f"✓ {device_name} erfolgreich abgefragt")
-                return data.get("data", {})
+            code = str(data.get("code", ""))
+            log("INFO", f"API Code: {code} | Message: {data.get('message', 'n/a')}")
+
+            if code == "0":
+                result = data.get("data", {})
+                log("INFO", f"✓ {device_name}: {len(result)} Felder empfangen")
+
+                # Debug: alle Felder ausgeben (wichtig für Feldnamen-Diagnose)
+                log("DEBUG", f"--- {device_name} ROHDATEN ---")
+                for key in sorted(result.keys()):
+                    log("DEBUG", f"  {key} = {result[key]}")
+                log("DEBUG", f"--- ENDE {device_name} ---")
+
+                return result
             else:
-                error_msg = data.get("msg", "Unknown API Error")
-                log_message("ERROR", f"{device_name} API Error: {error_msg}")
+                log("ERROR", f"API Fehler: {data}")
                 return {}
-        
-        elif response.status_code == 429:
-            log_message("ERROR", "⚠️ Rate Limit überschritten (HTTP 429)")
-            return {}
-        
         else:
-            log_message("ERROR", f"{device_name} HTTP {response.status_code}")
+            log("ERROR", f"HTTP {response.status_code}: {response.text[:300]}")
             return {}
-    
+
     except requests.exceptions.Timeout:
-        log_message("ERROR", f"{device_name} Timeout")
+        log("ERROR", f"{device_name} Timeout")
         return {}
-    
-    except requests.exceptions.ConnectionError:
-        log_message("ERROR", f"{device_name} Verbindungsfehler")
-        return {}
-    
     except Exception as e:
-        log_message("ERROR", f"{device_name} Fehler: {str(e)}")
+        log("ERROR", f"{device_name} Fehler: {e}")
         return {}
 
 # =============================================================================
 # DATENEXTRAKTION
 # =============================================================================
 
-def extract_powerstream_data(ps_data: dict) -> dict:
-    """Extrahiert PowerStream Daten"""
+def safe_float(value, divisor=1):
+    """Konvertiert Wert sicher zu float, mit optionalem Divisor."""
     try:
-        pv1 = ps_data.get("inv", {}).get("pv1Power", 0)
-        pv2 = ps_data.get("inv", {}).get("pv2Power", 0)
-        ac_out = ps_data.get("inv", {}).get("acPower", 0)
-        
-        return {
-            "pv1_watt": float(pv1) if pv1 else 0,
-            "pv2_watt": float(pv2) if pv2 else 0,
-            "ac_house_watt": float(ac_out) if ac_out else 0,
-        }
-    except Exception as e:
-        log_message("ERROR", f"PowerStream Parse Fehler: {str(e)}")
-        return {"pv1_watt": 0, "pv2_watt": 0, "ac_house_watt": 0}
+        return round(float(value) / divisor, 1)
+    except (TypeError, ValueError):
+        return 0.0
 
-def extract_delta3_data(d3_data: dict) -> dict:
-    """Extrahiert Delta 3 Daten"""
-    try:
-        soc = d3_data.get("bms", {}).get("soc", 0)
-        power = d3_data.get("bms", {}).get("power", 0)
-        
-        return {
-            "battery_soc_percent": float(soc) if soc else 0,
-            "battery_power_watt": float(power) if power else 0,
-        }
-    except Exception as e:
-        log_message("ERROR", f"Delta 3 Parse Fehler: {str(e)}")
-        return {"battery_soc_percent": 0, "battery_power_watt": 0}
+def extract_powerstream(data):
+    """
+    Extrahiert PowerStream-Werte.
+    Feldnamen der EcoFlow Open Platform für PowerStream (HMI):
+      20_1.pv1InputWatts  - PV1 Eingangsleistung (W)
+      20_1.pv2InputWatts  - PV2 Eingangsleistung (W)
+      20_1.invOutputWatts - Wechselrichter Ausgang zum Hausnetz (W)
+    Fallback auf alternative Schreibweisen falls API-Version abweicht.
+    """
+    pv1 = (data.get("20_1.pv1InputWatts")
+            or data.get("pv1InputWatts")
+            or data.get("inv.pv1Power")
+            or 0)
+
+    pv2 = (data.get("20_1.pv2InputWatts")
+            or data.get("pv2InputWatts")
+            or data.get("inv.pv2Power")
+            or 0)
+
+    ac = (data.get("20_1.invOutputWatts")
+          or data.get("invOutputWatts")
+          or data.get("20_1.outputWatts")
+          or data.get("inv.acPower")
+          or 0)
+
+    log("INFO", f"PowerStream Rohwerte: pv1={pv1}, pv2={pv2}, ac={ac}")
+    return {
+        "pv1_watt": safe_float(pv1),
+        "pv2_watt": safe_float(pv2),
+        "ac_house_watt": safe_float(ac),
+    }
+
+def extract_delta3(data):
+    """
+    Extrahiert Delta 3 / Delta 3 Plus Batteriewerte.
+    Feldnamen je nach Gerätegeneration:
+      bmsMaster.soc        - Ladestand (%)
+      pd.wattsInSum        - Ladeleistung (W)
+      pd.wattsOutSum       - Entladeleistung (W)
+    """
+    soc = (data.get("bmsMaster.soc")
+           or data.get("bms_bmsStatus.soc")
+           or data.get("bms.soc")
+           or 0)
+
+    power_in  = safe_float(data.get("pd.wattsInSum") or data.get("bmsMaster.inputWatts") or 0)
+    power_out = safe_float(data.get("pd.wattsOutSum") or data.get("bmsMaster.outputWatts") or 0)
+    # Netto: positiv = laden, negativ = entladen
+    battery_power = power_in - power_out if (power_in or power_out) else safe_float(data.get("bms.power") or 0)
+
+    log("INFO", f"Delta 3 Rohwerte: soc={soc}, power_in={power_in}, power_out={power_out}")
+    return {
+        "battery_soc_percent": safe_float(soc),
+        "battery_power_watt": battery_power,
+    }
 
 # =============================================================================
-# ENERGIEERZEUGUNG BERECHNUNG
+# TAGESERZEUGUNG
 # =============================================================================
 
-def calculate_daily_energy(csv_file: str) -> float:
-    """
-    Berechnet Tageserzeugung aus allen Einträgen
-    Formel: (PV1 + PV2) [W] × (1/60) [h] = Wh
-    """
+def calculate_daily_energy(csv_file):
+    """Berechnet Tageserzeugung aus CSV (PV-Wh seit Mitternacht)."""
     if not os.path.exists(csv_file):
         return 0.0
-    
-    total_pv_wh = 0.0
-    
+    today = datetime.now().strftime("%Y-%m-%d")
+    total = 0.0
     try:
         with open(csv_file, "r") as f:
-            reader = csv.DictReader(f)
-            
-            for row in reader:
-                try:
-                    pv1 = float(row.get("pv1_watt", 0))
-                    pv2 = float(row.get("pv2_watt", 0))
-                    total_pv_w = pv1 + pv2
-                    pv_wh = total_pv_w / 60  # 1 Minute = 1/60 Stunde
-                    total_pv_wh += pv_wh
-                except ValueError:
-                    continue
-        
-        return total_pv_wh
-    
+            for row in csv.DictReader(f):
+                if row.get("timestamp", "").startswith(today):
+                    try:
+                        total += (float(row.get("pv1_watt", 0)) + float(row.get("pv2_watt", 0))) / 60
+                    except ValueError:
+                        pass
     except Exception as e:
-        log_message("ERROR", f"Energieberechnung Fehler: {str(e)}")
-        return 0.0
+        log("ERROR", f"Energieberechnung Fehler: {e}")
+    return round(total, 2)
 
 # =============================================================================
-# CSV SPEICHERN
+# CSV
 # =============================================================================
 
-def append_to_csv(data: dict, csv_file: str):
-    """Fügt Daten zur CSV hinzu (oder erstellt sie)"""
+def append_to_csv(data, csv_file):
     file_exists = os.path.isfile(csv_file)
-    
     try:
         with open(csv_file, "a", newline="") as f:
             writer = csv.DictWriter(f, fieldnames=CSV_FIELDNAMES)
-            
             if not file_exists:
                 writer.writeheader()
-                log_message("INFO", f"📄 CSV erstellt: {csv_file}")
-            
             writer.writerow(data)
-            log_message("INFO", f"💾 Daten gespeichert: {data['timestamp']}")
-    
+        log("INFO", f"💾 Gespeichert: {data}")
     except Exception as e:
-        log_message("ERROR", f"CSV Speicher-Fehler: {str(e)}")
+        log("ERROR", f"CSV Fehler: {e}")
 
 # =============================================================================
 # MAIN
 # =============================================================================
 
 def main():
-    """Hauptfunktion"""
-    
-    log_message("INFO", "=" * 70)
-    log_message("INFO", "EcoFlow Datentracker (GitHub Actions Version)")
-    log_message("INFO", "=" * 70)
-    
-    # Validierung
+    log("INFO", "=" * 60)
+    log("INFO", "EcoFlow Datentracker - GitHub Actions")
+    log("INFO", "=" * 60)
+
     if not validate_config():
         sys.exit(1)
-    
-    # Abfrage
-    ps_data = query_ecoflow_device(POWERSTREAM_ENDPOINT, "PowerStream")
-    d3_data = query_ecoflow_device(DELTA3_ENDPOINT, "Delta 3")
-    
-    # Extraktion
-    ps_extracted = extract_powerstream_data(ps_data)
-    d3_extracted = extract_delta3_data(d3_data)
-    
-    # Energieberechnung
-    timestamp = datetime.now().isoformat(timespec="seconds")
-    daily_energy = calculate_daily_energy(CSV_FILENAME)
-    
-    # Zusammenstellung
-    row_data = {
-        "timestamp": timestamp,
-        "pv1_watt": ps_extracted["pv1_watt"],
-        "pv2_watt": ps_extracted["pv2_watt"],
-        "ac_house_watt": ps_extracted["ac_house_watt"],
-        "battery_soc_percent": d3_extracted["battery_soc_percent"],
-        "battery_power_watt": d3_extracted["battery_power_watt"],
-        "total_pv_wh_daily": round(daily_energy, 2)
-    }
-    
-    # Speichern
-    append_to_csv(row_data, CSV_FILENAME)
-    
-    # Zusammenfassung
-    log_message("INFO", f"""
-╔════════════════════════════════════════════════════════════╗
-║ 📊 GEMESSENE DATEN                                         ║
-╠════════════════════════════════════════════════════════════╣
-║ Zeitstempel:      {timestamp}
-║ PV1 Leistung:     {ps_extracted['pv1_watt']:>7.1f} W
-║ PV2 Leistung:     {ps_extracted['pv2_watt']:>7.1f} W
-║ AC-Einspeisung:   {ps_extracted['ac_house_watt']:>7.1f} W
-║ Batterie SoC:     {d3_extracted['battery_soc_percent']:>7.1f} %
-║ Batterie Leistung:{d3_extracted['battery_power_watt']:>7.1f} W
-╠════════════════════════════════════════════════════════════╣
-║ 📈 TAGESSUMME                                              ║
-╠════════════════════════════════════════════════════════════╣
-║ Tageserzeugung:   {daily_energy:>7.2f} Wh ({daily_energy/1000:>6.3f} kWh)
-╚════════════════════════════════════════════════════════════╝
-""")
-    
-    log_message("INFO", "✅ Datenabfrage erfolgreich abgeschlossen")
 
-# =============================================================================
-# AUSFÜHRUNG
-# =============================================================================
+    ps_data = query_device(POWERSTREAM_SN, "PowerStream")
+    d3_data = query_device(DELTA3_SN, "Delta 3")
+
+    ps = extract_powerstream(ps_data)
+    d3 = extract_delta3(d3_data)
+
+    timestamp = datetime.now().isoformat(timespec="seconds")
+    daily_wh = calculate_daily_energy(CSV_FILENAME)
+
+    row = {
+        "timestamp": timestamp,
+        "pv1_watt": ps["pv1_watt"],
+        "pv2_watt": ps["pv2_watt"],
+        "ac_house_watt": ps["ac_house_watt"],
+        "battery_soc_percent": d3["battery_soc_percent"],
+        "battery_power_watt": d3["battery_power_watt"],
+        "total_pv_wh_daily": daily_wh,
+    }
+
+    append_to_csv(row, CSV_FILENAME)
+
+    log("INFO", "")
+    log("INFO", f"PV1: {ps['pv1_watt']} W | PV2: {ps['pv2_watt']} W | AC-Haus: {ps['ac_house_watt']} W")
+    log("INFO", f"Batterie: {d3['battery_soc_percent']} % | {d3['battery_power_watt']} W")
+    log("INFO", f"Tageserzeugung: {daily_wh} Wh")
+    log("INFO", "✅ Fertig")
+
 
 if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
-        log_message("INFO", "⏸️  Skript unterbrochen")
         sys.exit(0)
     except Exception as e:
-        log_message("ERROR", f"🔴 Kritischer Fehler: {str(e)}")
+        log("ERROR", f"Kritischer Fehler: {e}")
         sys.exit(1)
