@@ -1,0 +1,2 @@
+timestamp,pv1_watt,pv2_watt,ac_house_watt,battery_soc_percent,battery_power_watt,total_pv_wh_daily
+2026-06-22T16:18:09,0.0,0.0,0.0,0.0,0.0,0.0
