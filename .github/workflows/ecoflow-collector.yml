@@ -7,7 +7,7 @@ name: EcoFlow Data Collector
 on:
   # Zeitgesteuert (Schedule) - alle 1 Minute
   schedule:
-    - cron: '* * * * *'  # Alle 1 Minute (UTC)
+    - cron: '*/5 * * * *'  # Alle 5 Minuten (GitHub-Minimum)
   
   # Manuell ausführbar
   workflow_dispatch:
