@@ -11,6 +11,8 @@ import sys
 import time
 import hashlib
 import hmac
+import random
+import string
 from datetime import datetime
 
 # =============================================================================
@@ -56,11 +58,17 @@ def validate_config():
 # AUTHENTIFIZIERUNG (EcoFlow Open Platform v2)
 # =============================================================================
 
-def generate_signature(access_key, secret_key, timestamp):
-    """EcoFlow API HMAC-SHA256 Signatur: HMAC(secret, access_key + timestamp)"""
+def generate_nonce(length=8):
+    return ''.join(random.choices(string.ascii_letters + string.digits, k=length))
+
+def generate_signature(access_key, secret_key, nonce, timestamp, params_str=""):
+    """EcoFlow Open Platform HMAC-SHA256 Signatur."""
+    sign_str = f"accessKey={access_key}&nonce={nonce}&timestamp={timestamp}"
+    if params_str:
+        sign_str += f"&{params_str}"
     return hmac.new(
         secret_key.encode("utf-8"),
-        (access_key + timestamp).encode("utf-8"),
+        sign_str.encode("utf-8"),
         hashlib.sha256
     ).hexdigest()
 
@@ -69,18 +77,22 @@ def generate_signature(access_key, secret_key, timestamp):
 # =============================================================================
 
 def query_device(sn, device_name):
-    """Fragt alle Gerätewerte über EcoFlow API ab."""
+    """Fragt alle Gerätewerte über EcoFlow Open Platform ab."""
     try:
         timestamp = str(int(time.time() * 1000))
-        signature = generate_signature(ECOFLOW_ACCESS_KEY, ECOFLOW_SECRET_KEY, timestamp)
+        nonce = generate_nonce()
+        params_str = f"sn={sn}"
+        sign = generate_signature(ECOFLOW_ACCESS_KEY, ECOFLOW_SECRET_KEY, nonce, timestamp, params_str)
 
         headers = {
-            "Authorization": f"{ECOFLOW_ACCESS_KEY}:{signature}",
-            "X-Request-Timestamp": timestamp,
+            "accessKey": ECOFLOW_ACCESS_KEY,
+            "timestamp": timestamp,
+            "nonce": nonce,
+            "sign": sign,
             "Content-Type": "application/json",
         }
 
-        url = f"{ECOFLOW_API_BASE}/api/device/QueryDeviceStatus?sn={sn}"
+        url = f"{ECOFLOW_API_BASE}/iot-open/sign/device/quota/all?sn={sn}"
         log("INFO", f"→ Frage {device_name} ab ({sn})")
 
         response = requests.get(url, headers=headers, timeout=15)
@@ -91,7 +103,7 @@ def query_device(sn, device_name):
             code = str(data.get("code", ""))
             log("INFO", f"API Code: {code} | Message: {data.get('message', 'n/a')}")
 
-            if code in ("0", 0):
+            if code == "0":
                 result = data.get("data", {})
                 log("INFO", f"✓ {device_name}: {len(result)} Felder empfangen")
 
