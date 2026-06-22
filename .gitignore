@@ -2,9 +2,6 @@
 # .gitignore - Dateien die NICHT in Git gepusht werden sollen
 # ============================================================================
 
-# CSV Datendateien (lokal)
-ecoflow_energie_daten.csv
-
 # Python
 __pycache__/
 *.py[cod]
