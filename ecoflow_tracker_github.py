@@ -61,11 +61,14 @@ def validate_config():
 def generate_nonce(length=8):
     return ''.join(random.choices(string.ascii_letters + string.digits, k=length))
 
-def generate_signature(access_key, secret_key, nonce, timestamp, params_str=""):
-    """EcoFlow Open Platform HMAC-SHA256 Signatur."""
-    sign_str = f"accessKey={access_key}&nonce={nonce}&timestamp={timestamp}"
-    if params_str:
-        sign_str += f"&{params_str}"
+def generate_signature(access_key, secret_key, nonce, timestamp, query_params=None):
+    """EcoFlow Open Platform HMAC-SHA256 Signatur.
+    Alle Parameter (inkl. Auth-Params) alphabetisch sortiert.
+    """
+    params = {"accessKey": access_key, "nonce": nonce, "timestamp": timestamp}
+    if query_params:
+        params.update(query_params)
+    sign_str = "&".join(f"{k}={v}" for k, v in sorted(params.items()))
     return hmac.new(
         secret_key.encode("utf-8"),
         sign_str.encode("utf-8"),
@@ -81,8 +84,7 @@ def query_device(sn, device_name):
     try:
         timestamp = str(int(time.time() * 1000))
         nonce = generate_nonce()
-        params_str = f"sn={sn}"
-        sign = generate_signature(ECOFLOW_ACCESS_KEY, ECOFLOW_SECRET_KEY, nonce, timestamp, params_str)
+        sign = generate_signature(ECOFLOW_ACCESS_KEY, ECOFLOW_SECRET_KEY, nonce, timestamp, {"sn": sn})
 
         headers = {
             "accessKey": ECOFLOW_ACCESS_KEY,
