@@ -163,9 +163,9 @@ def extract_powerstream(data):
 
     log("INFO", f"PowerStream Rohwerte: pv1={pv1}, pv2={pv2}, ac={ac}")
     return {
-        "pv1_watt": safe_float(pv1),
-        "pv2_watt": safe_float(pv2),
-        "ac_house_watt": safe_float(ac),
+        "pv1_watt": safe_float(pv1, divisor=10),
+        "pv2_watt": safe_float(pv2, divisor=10),
+        "ac_house_watt": safe_float(ac, divisor=10),
     }
 
 def extract_delta3(data):
