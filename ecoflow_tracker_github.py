@@ -145,27 +145,21 @@ def extract_powerstream(data):
       20_1.invOutputWatts - Wechselrichter Ausgang zum Hausnetz (W)
     Fallback auf alternative Schreibweisen falls API-Version abweicht.
     """
-    pv1 = (data.get("20_1.pv1InputWatts")
-            or data.get("pv1InputWatts")
-            or data.get("inv.pv1Power")
-            or 0)
+    pv1 = data.get("20_1.pv1InputWatts") or data.get("pv1InputWatts") or 0
+    pv2 = data.get("20_1.pv2InputWatts") or data.get("pv2InputWatts") or 0
+    ac  = data.get("20_1.invOutputWatts") or data.get("invOutputWatts") or 0
 
-    pv2 = (data.get("20_1.pv2InputWatts")
-            or data.get("pv2InputWatts")
-            or data.get("inv.pv2Power")
-            or 0)
+    # Batterie-Daten kommen vom PowerStream (angeschlossene Batterie)
+    bat_soc   = data.get("20_1.batSoc") or data.get("batSoc") or 0
+    bat_watts = data.get("20_1.batInputWatts") or data.get("batInputWatts") or 0
 
-    ac = (data.get("20_1.invOutputWatts")
-          or data.get("invOutputWatts")
-          or data.get("20_1.outputWatts")
-          or data.get("inv.acPower")
-          or 0)
-
-    log("INFO", f"PowerStream Rohwerte: pv1={pv1}, pv2={pv2}, ac={ac}")
+    log("INFO", f"PowerStream Rohwerte: pv1={pv1}, pv2={pv2}, ac={ac}, bat_soc={bat_soc}, bat_w={bat_watts}")
     return {
         "pv1_watt": safe_float(pv1, divisor=10),
         "pv2_watt": safe_float(pv2, divisor=10),
         "ac_house_watt": safe_float(ac, divisor=10),
+        "battery_soc_percent": safe_float(bat_soc),
+        "battery_power_watt": safe_float(bat_watts, divisor=10),
     }
 
 def extract_delta3(data):
@@ -243,10 +237,15 @@ def main():
         sys.exit(1)
 
     ps_data = query_device(POWERSTREAM_SN, "PowerStream")
-    d3_data = query_device(DELTA3_SN, "Delta 3")
-
     ps = extract_powerstream(ps_data)
-    d3 = extract_delta3(d3_data)
+
+    # Delta 3 als optionaler Fallback — Batterie-Daten kommen primär vom PowerStream
+    if DELTA3_SN:
+        d3_data = query_device(DELTA3_SN, "Delta 3")
+        d3 = extract_delta3(d3_data)
+        if d3["battery_soc_percent"]:
+            ps["battery_soc_percent"] = d3["battery_soc_percent"]
+            ps["battery_power_watt"] = d3["battery_power_watt"]
 
     timestamp = datetime.now().isoformat(timespec="seconds")
     daily_wh = calculate_daily_energy(CSV_FILENAME)
@@ -256,8 +255,8 @@ def main():
         "pv1_watt": ps["pv1_watt"],
         "pv2_watt": ps["pv2_watt"],
         "ac_house_watt": ps["ac_house_watt"],
-        "battery_soc_percent": d3["battery_soc_percent"],
-        "battery_power_watt": d3["battery_power_watt"],
+        "battery_soc_percent": ps["battery_soc_percent"],
+        "battery_power_watt": ps["battery_power_watt"],
         "total_pv_wh_daily": daily_wh,
     }
 
@@ -265,7 +264,7 @@ def main():
 
     log("INFO", "")
     log("INFO", f"PV1: {ps['pv1_watt']} W | PV2: {ps['pv2_watt']} W | AC-Haus: {ps['ac_house_watt']} W")
-    log("INFO", f"Batterie: {d3['battery_soc_percent']} % | {d3['battery_power_watt']} W")
+    log("INFO", f"Batterie: {ps['battery_soc_percent']} % | {ps['battery_power_watt']} W")
     log("INFO", f"Tageserzeugung: {daily_wh} Wh")
     log("INFO", "✅ Fertig")
 
