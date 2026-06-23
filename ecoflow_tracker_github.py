@@ -24,7 +24,7 @@ ECOFLOW_SECRET_KEY = os.environ.get("ECOFLOW_SECRET_KEY", "")
 POWERSTREAM_SN = os.environ.get("POWERSTREAM_SN", "")
 DELTA3_SN = os.environ.get("DELTA3_SN", "")
 
-ECOFLOW_API_BASE = "https://api-e.ecoflow.com"  # EU-Server
+ECOFLOW_API_BASE = "https://api.ecoflow.com"
 CSV_FILENAME = "ecoflow_energie_daten.csv"
 CSV_FIELDNAMES = [
     "timestamp", "pv1_watt", "pv2_watt", "ac_house_watt",
@@ -63,12 +63,15 @@ def generate_nonce(length=8):
 
 def generate_signature(access_key, secret_key, nonce, timestamp, query_params=None):
     """EcoFlow Open Platform HMAC-SHA256 Signatur.
-    Alle Parameter (inkl. Auth-Params) alphabetisch sortiert.
+    Format: {query_params}&accessKey={key}&nonce={nonce}&timestamp={timestamp}
     """
-    params = {"accessKey": access_key, "nonce": nonce, "timestamp": timestamp}
+    auth_str = f"accessKey={access_key}&nonce={nonce}&timestamp={timestamp}"
     if query_params:
-        params.update(query_params)
-    sign_str = "&".join(f"{k}={v}" for k, v in sorted(params.items()))
+        # Query-Params kommen zuerst, dann Auth-Params
+        params_str = "&".join(f"{k}={v}" for k, v in sorted(query_params.items()))
+        sign_str = f"{params_str}&{auth_str}"
+    else:
+        sign_str = auth_str
     return hmac.new(
         secret_key.encode("utf-8"),
         sign_str.encode("utf-8"),
