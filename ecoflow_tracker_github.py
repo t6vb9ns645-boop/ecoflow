@@ -12,7 +12,6 @@ import time
 import hashlib
 import hmac
 import random
-import string
 from datetime import datetime
 
 # =============================================================================
@@ -58,8 +57,8 @@ def validate_config():
 # AUTHENTIFIZIERUNG (EcoFlow Open Platform v2)
 # =============================================================================
 
-def generate_nonce(length=8):
-    return ''.join(random.choices(string.ascii_letters + string.digits, k=length))
+def generate_nonce():
+    return str(random.randint(100000, 999999))
 
 def generate_signature(access_key, secret_key, nonce, timestamp, query_params=None):
     """EcoFlow Open Platform HMAC-SHA256 Signatur.
