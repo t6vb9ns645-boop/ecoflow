@@ -61,11 +61,9 @@ def generate_nonce():
     return str(random.randint(100000, 999999))
 
 def generate_signature(access_key, secret_key, nonce, timestamp, query_params=None):
-    all_params = {"accessKey": access_key, "nonce": nonce, "timestamp": timestamp}
-    if query_params:
-        all_params.update(query_params)
-    sign_str = "&".join(f"{k}={v}" for k, v in sorted(all_params.items()))
-    log("DEBUG", f"Sign string structure: {sign_str.replace(access_key, '***')}")
+    # GET requests: sign only auth params (no URL query params)
+    sign_str = f"accessKey={access_key}&nonce={nonce}&timestamp={timestamp}"
+    log("DEBUG", f"Sign string: accessKey=***&nonce={nonce}&timestamp={timestamp}")
     return hmac.new(
         secret_key.encode("utf-8"),
         sign_str.encode("utf-8"),
@@ -81,7 +79,7 @@ def query_device(sn, device_name):
     try:
         timestamp = str(int(time.time() * 1000))
         nonce = generate_nonce()
-        sign = generate_signature(ECOFLOW_ACCESS_KEY, ECOFLOW_SECRET_KEY, nonce, timestamp, {"sn": sn})
+        sign = generate_signature(ECOFLOW_ACCESS_KEY, ECOFLOW_SECRET_KEY, nonce, timestamp)
 
         headers = {
             "accessKey": ECOFLOW_ACCESS_KEY,
