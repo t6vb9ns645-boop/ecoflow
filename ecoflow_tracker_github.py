@@ -61,16 +61,11 @@ def generate_nonce():
     return str(random.randint(100000, 999999))
 
 def generate_signature(access_key, secret_key, nonce, timestamp, query_params=None):
-    """EcoFlow Open Platform HMAC-SHA256 Signatur.
-    Format: {query_params}&accessKey={key}&nonce={nonce}&timestamp={timestamp}
-    """
-    auth_str = f"accessKey={access_key}&nonce={nonce}&timestamp={timestamp}"
+    all_params = {"accessKey": access_key, "nonce": nonce, "timestamp": timestamp}
     if query_params:
-        # Query-Params kommen zuerst, dann Auth-Params
-        params_str = "&".join(f"{k}={v}" for k, v in sorted(query_params.items()))
-        sign_str = f"{params_str}&{auth_str}"
-    else:
-        sign_str = auth_str
+        all_params.update(query_params)
+    sign_str = "&".join(f"{k}={v}" for k, v in sorted(all_params.items()))
+    log("DEBUG", f"Sign string structure: {sign_str.replace(access_key, '***')}")
     return hmac.new(
         secret_key.encode("utf-8"),
         sign_str.encode("utf-8"),
