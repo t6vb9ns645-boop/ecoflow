@@ -5,15 +5,18 @@ on:
     - cron: '*/5 * * * *'  # Alle 5 Minuten (GitHub-Minimum)
   workflow_dispatch:
 
-# Schreibzugriff auf das Repository nötig, um CSV zu committen
-# actions:write nötig, um deploy-pages.yml nach Datenpush auszulösen
+# pages: write + id-token: write sind für den deploy-pages-Job erforderlich
 permissions:
   contents: write
   actions: write
+  pages: write
+  id-token: write
 
 jobs:
   collect-data:
     runs-on: ubuntu-latest
+    outputs:
+      committed: ${{ steps.commit.outputs.committed }}
 
     steps:
       - name: Checkout repository
@@ -23,6 +26,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+          cache: 'pip'
 
       - name: Install dependencies
         run: |
@@ -51,8 +55,33 @@ jobs:
             echo "committed=true" >> $GITHUB_OUTPUT
           fi
 
-      - name: Trigger Pages deploy with fresh CSV
-        if: steps.commit.outputs.committed == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh workflow run deploy-pages.yml --ref main
+  # Läuft direkt nach collect-data im selben Workflow-Run — kein separater
+  # workflow_dispatch nötig, spart ~2 min Runner-Startzeit.
+  deploy-pages:
+    needs: collect-data
+    if: needs.collect-data.outputs.committed == 'true'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout (mit frischen Daten)
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
