@@ -290,7 +290,9 @@ const CHART_DEFAULTS = {
 const X_SCALE = { ticks:{ color:'#8A93A0', maxTicksLimit:8, font:{ family:"'IBM Plex Mono'", size:10 } }, grid:{ color:'#1B2430' } };
 const Y_SCALE = (label, color='#8A93A0') => ({ ticks:{ color, font:{ size:10 } }, grid:{ color:'#1B2430' }, title:{ display:true, text:label, color, font:{ size:11 } } });
 
-function nz(v){ return (isNaN(v) || v===0) ? null : v; } // null = Chart.js skips the point
+// Returns null for NaN (missing/unparseable) but keeps 0 as 0.
+// Chart.js renders null as a gap, preserving legitimate zero-watt readings.
+function nn(v){ return isNaN(v) ? null : v; }
 
 function render(data, sourceLabel){
   destroyCharts();
@@ -431,10 +433,10 @@ function render(data, sourceLabel){
     type:'line',
     data:{ labels: validData.map(r=>fmtLabel(r.t)),
       datasets:[
-        { label:'Netzverbrauch (W)', data: validData.map(r=>nz(r.grid_cons_watt)), borderColor:'#60A5FA', backgroundColor:'transparent', fill:false, tension:0.2, pointRadius:0, borderWidth:1.6 },
-        { label:'Steckdose inv→plug (W)', data: validData.map(r=>nz(r.inv_to_plug_watt)), borderColor:'#34D399', backgroundColor:'transparent', fill:false, tension:0.2, pointRadius:0, borderWidth:1.4, borderDash:[3,2] },
-        { label:'PV→WR (W)', data: validData.map(r=>nz(r.pv_to_inv_watt)), borderColor:'#FBBF24', backgroundColor:'transparent', fill:false, tension:0.2, pointRadius:0, borderWidth:1.4 },
-        { label:'Dauerleistung (W)', data: validData.map(r=>nz(r.permanent_watt)), borderColor:'#C084FC', backgroundColor:'transparent', fill:false, tension:0.1, pointRadius:0, borderWidth:1.2, borderDash:[6,3] },
+        { label:'Netzverbrauch (W)', data: validData.map(r=>nn(r.grid_cons_watt)), borderColor:'#60A5FA', backgroundColor:'transparent', fill:false, tension:0.2, pointRadius:0, borderWidth:1.6 },
+        { label:'Steckdose inv→plug (W)', data: validData.map(r=>nn(r.inv_to_plug_watt)), borderColor:'#34D399', backgroundColor:'transparent', fill:false, tension:0.2, pointRadius:0, borderWidth:1.4, borderDash:[3,2] },
+        { label:'PV→WR (W)', data: validData.map(r=>nn(r.pv_to_inv_watt)), borderColor:'#FBBF24', backgroundColor:'transparent', fill:false, tension:0.2, pointRadius:0, borderWidth:1.4 },
+        { label:'Dauerleistung (W)', data: validData.map(r=>nn(r.permanent_watt)), borderColor:'#C084FC', backgroundColor:'transparent', fill:false, tension:0.1, pointRadius:0, borderWidth:1.2, borderDash:[6,3] },
       ]},
     options:{ ...CHART_DEFAULTS,
       scales:{ x: X_SCALE, y: Y_SCALE('Watt') }}
@@ -455,9 +457,9 @@ function render(data, sourceLabel){
     type:'line',
     data:{ labels: validData.map(r=>fmtLabel(r.t)),
       datasets:[
-        { label:'PV1 (V)', data: validData.map(r=>nz(r.pv1_volt)), borderColor:'#A78BFA', backgroundColor:'transparent', fill:false, tension:0.2, pointRadius:0, borderWidth:1.8, yAxisID:'y' },
-        { label:'PV2 (V)', data: validData.map(r=>nz(r.pv2_volt)), borderColor:'#C4B5FD', backgroundColor:'transparent', fill:false, tension:0.2, pointRadius:0, borderWidth:1.4, yAxisID:'y' },
-        { label:'WR-Ausgang (V)', data: validData.map(r=>nz(r.inv_volt)), borderColor:'#7C3AED', backgroundColor:'transparent', fill:false, tension:0.1, pointRadius:0, borderWidth:1.4, borderDash:[4,3], yAxisID:'y2' }
+        { label:'PV1 (V)', data: validData.map(r=>nn(r.pv1_volt)), borderColor:'#A78BFA', backgroundColor:'transparent', fill:false, tension:0.2, pointRadius:0, borderWidth:1.8, yAxisID:'y' },
+        { label:'PV2 (V)', data: validData.map(r=>nn(r.pv2_volt)), borderColor:'#C4B5FD', backgroundColor:'transparent', fill:false, tension:0.2, pointRadius:0, borderWidth:1.4, yAxisID:'y' },
+        { label:'WR-Ausgang (V)', data: validData.map(r=>nn(r.inv_volt)), borderColor:'#7C3AED', backgroundColor:'transparent', fill:false, tension:0.1, pointRadius:0, borderWidth:1.4, borderDash:[4,3], yAxisID:'y2' }
       ]},
     options:{ ...CHART_DEFAULTS,
       scales:{
@@ -472,15 +474,19 @@ function render(data, sourceLabel){
     type:'line',
     data:{ labels: validData.map(r=>fmtLabel(r.t)),
       datasets:[
-        { label:'PV1 (°C)', data: validData.map(r=>nz(r.pv1_temp_c)), borderColor:'#F87171', backgroundColor:'rgba(248,113,113,0.08)', fill:true, tension:0.25, pointRadius:0, borderWidth:1.8 },
-        { label:'PV2 (°C)', data: validData.map(r=>nz(r.pv2_temp_c)), borderColor:'#FCA5A5', backgroundColor:'transparent', fill:false, tension:0.25, pointRadius:0, borderWidth:1.4, borderDash:[3,2] },
-        { label:'WR/LLC (°C)', data: validData.map(r=>nz(r.inv_temp_c)), borderColor:'#FB923C', backgroundColor:'transparent', fill:false, tension:0.2, pointRadius:0, borderWidth:1.6 },
+        { label:'PV1 (°C)', data: validData.map(r=>nn(r.pv1_temp_c)), borderColor:'#F87171', backgroundColor:'rgba(248,113,113,0.08)', fill:true, tension:0.25, pointRadius:0, borderWidth:1.8 },
+        { label:'PV2 (°C)', data: validData.map(r=>nn(r.pv2_temp_c)), borderColor:'#FCA5A5', backgroundColor:'transparent', fill:false, tension:0.25, pointRadius:0, borderWidth:1.4, borderDash:[3,2] },
+        { label:'WR/LLC (°C)', data: validData.map(r=>nn(r.inv_temp_c)), borderColor:'#FB923C', backgroundColor:'transparent', fill:false, tension:0.2, pointRadius:0, borderWidth:1.6 },
       ]},
     options:{ ...CHART_DEFAULTS,
       scales:{ x: X_SCALE, y: Y_SCALE('°C','#F87171') }}
   });
 
-  document.getElementById('footerSource').textContent = 'Quelle: '+sourceLabel;
+  const lastRow = data[data.length-1];
+  const schemaLabel = !isNaN(lastRow.pv1_temp_c)
+    ? 'Schema v2 · alle Felder aktiv'
+    : 'Schema v2 · Collector-Lauf ausstehend (neue Felder noch leer)';
+  document.getElementById('footerSource').textContent = 'Quelle: '+sourceLabel+' · '+schemaLabel;
   document.getElementById('footerCount').textContent = data.length+' Zeilen';
 }
 
