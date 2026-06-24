@@ -9,6 +9,20 @@ die Versionierung folgt grob [Semantic Versioning](https://semver.org/lang/de/).
 
 ---
 
+## [3.5.2] — 2026-06-24
+
+### Changed
+- **Graph X-Achsen-Labels zweizeilig**: Datum (`DD.MM.`) und Uhrzeit (`HH:MM`) werden
+  jetzt untereinander dargestellt. Dadurch passen mehr Ticks auf die Achse und es wird
+  weniger horizontaler Platz verschwendet.
+- Dashboard-Version auf `v3.5.2` aktualisiert.
+
+---
+
+## [3.5.1] — 2026-06-24
+
+---
+
 ## [3.5.0] — 2026-06-24
 
 ### Added
