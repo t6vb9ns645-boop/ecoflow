@@ -9,6 +9,30 @@ die Versionierung folgt grob [Semantic Versioning](https://semver.org/lang/de/).
 
 ---
 
+## [3.3.0] — 2026-06-24
+
+### Added
+- **Zeitraum-Filterleiste** im Dashboard zwischen Statusbar und Forecast-Panel:
+  - **Schnellauswahl-Buttons**: `Heute | Gestern | 7 Tage | 30 Tage | Diesen Monat | Dieses Jahr | Alle`
+  - **Individueller Datepicker**: Zwei Textfelder im Format `tt.mm.jjjj hh:mm` für „von" und „bis"
+    mit „Anwenden"-Schaltfläche.
+  - Aktiver Filter wird durch goldene Hervorhebung des Buttons angezeigt.
+  - Statuszeile der Filterleiste zeigt Anzahl Messwerte und genaue Zeitspanne.
+- **Automatische Datenaggregation** für große Zeiträume:
+  - Bereiche > 7 Tage → stündliche Durchschnittswerte für die Diagramme.
+  - Bereiche > 90 Tage → tägliche Durchschnittswerte für die Diagramme.
+- **Zeitraum-adaptive Energie-KPI-Kacheln**: Die vier Kennzahlen in Sektion „02 Energie"
+  berechnen sich nun für den gewählten Zeitraum statt fest für „heute".
+  Beschriftungen passen sich an: „Energieproduktion heute", „… gestern", „… (7 Tage)" usw.
+  Energieberechnungen verwenden stets die Roh-Messdaten (nicht aggregiert), damit die
+  zeitgewichtete Integration korrekt bleibt.
+- **Filterzustand bleibt bei Auto-Refresh erhalten**: Beim automatischen Nachladen der CSV
+  (alle 2 Minuten) wird der zuletzt aktive Filter wiederholt; bei Presets werden die
+  Zeitgrenzen aktuell berechnet (sodass „Heute" nach Mitternacht automatisch den neuen Tag zeigt).
+- Dashboard-Version auf `v3.3.0` aktualisiert.
+
+---
+
 ## [3.2.2] — 2026-06-24
 
 ### Fixed
@@ -186,6 +210,7 @@ Erste produktive Version (GitHub Actions Edition).
 - Erstes Chart.js-Dashboard auf GitHub Pages mit Auto-Refresh.
 - Berechnung der Tageserzeugung (Wh seit Mitternacht).
 
+[3.3.0]: https://github.com/t6vb9ns645-boop/ecoflow/releases/tag/v3.3.0
 [3.2.0]: https://github.com/t6vb9ns645-boop/ecoflow/releases/tag/v3.2.0
 [3.1.2]: https://github.com/t6vb9ns645-boop/ecoflow/releases/tag/v3.1.2
 [3.1.1]: https://github.com/t6vb9ns645-boop/ecoflow/releases/tag/v3.1.1
