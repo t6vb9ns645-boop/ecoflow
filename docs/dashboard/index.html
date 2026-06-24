@@ -157,6 +157,26 @@
   .callout code{font-family:'IBM Plex Mono',monospace;background:#2a1c1a;padding:1px 5px;border-radius:4px;font-size:12px;color:#F2C9C2;}
   .callout.ok code{background:#16332b;color:#C9F2E5;}
 
+  /* ── Login overlay ── */
+  #login-wall{position:fixed;inset:0;z-index:9999;background:var(--bg);
+    display:flex;align-items:center;justify-content:center;}
+  .login-box{background:var(--panel);border:1px solid var(--hair);border-radius:14px;
+    padding:40px 36px;width:100%;max-width:360px;display:flex;flex-direction:column;gap:20px;}
+  .login-logo{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.12em;
+    color:var(--solar);text-transform:uppercase;text-align:center;margin:0;}
+  .login-title{margin:0;font-size:18px;font-weight:600;text-align:center;letter-spacing:-.01em;}
+  .login-form{display:flex;flex-direction:column;gap:12px;}
+  .login-inp{font-family:'IBM Plex Mono',monospace;font-size:13px;padding:11px 14px;
+    border-radius:8px;background:var(--panel-2);border:1px solid var(--hair);
+    color:var(--text);outline:none;width:100%;}
+  .login-inp:focus{border-color:rgba(242,169,59,.4);}
+  .login-btn{background:var(--solar);color:#1a1208;border:none;font-weight:600;
+    font-family:'IBM Plex Mono',monospace;font-size:13px;padding:11px;
+    border-radius:8px;cursor:pointer;width:100%;}
+  .login-btn:hover{filter:brightness(1.08);}
+  .login-err{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--warn);
+    text-align:center;min-height:16px;margin:0;}
+
   footer{margin-top:36px;padding-top:16px;border-top:1px solid var(--hair);
     font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);
     display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;}
@@ -174,6 +194,20 @@
 </style>
 </head>
 <body>
+
+<div id="login-wall">
+  <div class="login-box">
+    <p class="login-logo">EcoFlow BKW — Dashboard</p>
+    <h2 class="login-title">Zugang</h2>
+    <form class="login-form" id="loginForm">
+      <input class="login-inp" type="password" id="loginPw"
+             placeholder="Passwort" autocomplete="current-password">
+      <button class="login-btn" type="submit">Anmelden</button>
+    </form>
+    <p class="login-err" id="loginErr"></p>
+  </div>
+</div>
+
 <div class="wrap">
 
   <header>
@@ -949,6 +983,40 @@ function updateForecast(){
 }
 updateForecast();
 setInterval(updateForecast, 1000);
+
+// ── Zugriffskontrolle ──
+// Passwort-Hash ändern: echo -n "neuespasswort" | sha256sum
+const PW_HASH = '08ac8d7a13b3413d6b87e3c74185c8699437acabd4509c76002a037fd7d4138b';
+const AUTH_KEY = 'ecoflow_auth';
+
+async function sha256hex(str) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function handleLogin(e) {
+  e.preventDefault();
+  const pw = document.getElementById('loginPw').value;
+  const hash = await sha256hex(pw);
+  if (hash === PW_HASH) {
+    sessionStorage.setItem(AUTH_KEY, '1');
+    document.getElementById('login-wall').style.display = 'none';
+  } else {
+    const errEl = document.getElementById('loginErr');
+    errEl.textContent = 'Falsches Passwort';
+    document.getElementById('loginPw').value = '';
+    document.getElementById('loginPw').focus();
+    setTimeout(() => { errEl.textContent = ''; }, 3000);
+  }
+}
+
+document.getElementById('loginForm').addEventListener('submit', handleLogin);
+
+if (sessionStorage.getItem(AUTH_KEY) === '1') {
+  document.getElementById('login-wall').style.display = 'none';
+} else {
+  document.getElementById('loginPw').focus();
+}
 </script>
 </body>
 </html>
