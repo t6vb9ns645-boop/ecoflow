@@ -101,7 +101,10 @@
 
   <div class="statusbar">
     <div class="status-line" id="statusLine"><span class="status-dot"></span><span>Initialisiere …</span></div>
-    <button onclick="loadData()">↻ Neu laden</button>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <span id="refreshCountdown" style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);">Aktualisierung in 120s</span>
+      <button onclick="loadData();countdown=120;">↻ Neu laden</button>
+    </div>
   </div>
 
   <div class="timeline-card">
@@ -367,6 +370,19 @@ async function loadData(){
 }
 
 loadData();
+
+const REFRESH_INTERVAL = 120; // Sekunden
+let countdown = REFRESH_INTERVAL;
+
+setInterval(() => {
+  countdown--;
+  const el = document.getElementById('refreshCountdown');
+  if (el) el.textContent = `Aktualisierung in ${countdown}s`;
+  if (countdown <= 0) {
+    countdown = REFRESH_INTERVAL;
+    loadData();
+  }
+}, 1000);
 </script>
 </body>
 </html>
