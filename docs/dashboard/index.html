@@ -515,7 +515,6 @@ function render(data, sourceLabel){
       scales:{ x: X_SCALE, y: Y_SCALE('°C','#F87171') }}
   });
 
-  const lastRow = data[data.length-1];
   const schemaLabel = !isNaN(lastRow.pv1_temp_c)
     ? 'Schema v2 · alle Felder aktiv'
     : 'Schema v2 · Collector-Lauf ausstehend (neue Felder noch leer)';
@@ -563,10 +562,9 @@ setInterval(() => {
   }
 }, 1000);
 
-/* ── Cron-Job Forecast ──────────────────────────────────────────────────────
-   cron-job.org triggers every 2 minutes: */2 * * * *
-   → fetch times = all even-minute boundaries within the next 60 min
-   ────────────────────────────────────────────────────────────────────────── */
+// ── Cron-Job Forecast ──────────────────────────────────────────────────────
+// cron-job.org triggers every 2 minutes ("*/2 * * * *" in cron syntax)
+// → fetch times = all even-minute boundaries within the next 60 min
 const CRON_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes
 const FORECAST_WINDOW_MS = 60 * 60 * 1000; // 60 minutes
 
