@@ -9,6 +9,18 @@ die Versionierung folgt grob [Semantic Versioning](https://semver.org/lang/de/).
 
 ---
 
+## [3.1.0] — 2026-06-24
+
+### Added
+- **Systemleistung-Diagramm** (Sektion 02, vor dem Tageszähler): zeigt PV-Gesamt,
+  AC-Hausverbrauch und Batterie-Leistung als Kurven im Zeitverlauf — gibt auf
+  einen Blick einen Überblick über die wichtigsten Leistungsflüsse.
+
+### Changed
+- Dashboard-Version auf `v3.1` aktualisiert.
+
+---
+
 ## [3.0.0] — 2026-06-24
 
 Vollständige Neustrukturierung des Dashboards aus Profi-Perspektive.
@@ -17,7 +29,7 @@ Vollständige Neustrukturierung des Dashboards aus Profi-Perspektive.
 - **Live-Momentaufnahme** als eigene Hero-Sektion ganz oben: PV-Erzeugung,
   AC-Hausverbrauch, Batterie-Ladezustand und Batterie-Leistung als große
   Kennzahlen mit Stand-Zeitstempel.
-- **Dedizierter Bereich „Datenqualität"** (Sektion 06): bündelt sämtliche
+- **Dedizierter Bereich „Datenqualität“** (Sektion 06): bündelt sämtliche
   Hinweise zu Nullwerten, Datenabdeckung, Aufzeichnungsfenster und
   Diagnose-Callout an einer Stelle — vorher über vier Bereiche verstreut.
 - **Nach Domäne gruppierte Kennzahlen**: eigene KPI-Reihen für Spannungen,
@@ -33,8 +45,8 @@ Vollständige Neustrukturierung des Dashboards aus Profi-Perspektive.
   Datenqualität**; PV-Erzeugung als wichtigster Graph nach oben gezogen.
 - Diagnose-Callout in nutzerfreundliche Sprache übersetzt (kein
   Entwickler-Jargon wie `query_device()` mehr).
-- Achsen mit `beginAtZero` für Leistungswerte, fester 0–100 %-Achse für SOC.
-- Maximale Inhaltsbreite auf 1000 px erhöht.
+- Achsen mit `beginAtZero` für Leistungswerte, fester 0–100 %-Achse für SOC.
+- Maximale Inhaltsbreite auf 1000 px erhöht.
 
 ### Fixed
 - **`.section-label`-CSS wiederhergestellt** — die Abschnittsüberschriften
@@ -61,7 +73,7 @@ Erweiterung um alle verfügbaren API-Kennzahlen und Stabilisierung der Pipeline.
 
 ### Changed
 - Adaptive Y-Achsen für Spannungs- und Temperatur-Diagramme: Grenzen werden
-  aus den tatsächlichen Messwerten berechnet (±2 V / ±3 °C), damit kleine
+  aus den tatsächlichen Messwerten berechnet (±2 V / ±3 °C), damit kleine
   Schwankungen sichtbar bleiben.
 - `extract_powerstream()` nutzt `get_field()` statt `or 0`-Verkettung —
   unterscheidet korrekt zwischen fehlendem Feld und gültiger 0.
@@ -89,6 +101,7 @@ Erste produktive Version (GitHub Actions Edition).
 - Erstes Chart.js-Dashboard auf GitHub Pages mit Auto-Refresh.
 - Berechnung der Tageserzeugung (Wh seit Mitternacht).
 
+[3.1.0]: https://github.com/t6vb9ns645-boop/ecoflow/releases/tag/v3.1.0
 [3.0.0]: https://github.com/t6vb9ns645-boop/ecoflow/releases/tag/v3.0.0
 [2.0.0]: https://github.com/t6vb9ns645-boop/ecoflow/releases/tag/v2.0.0
 [1.0.0]: https://github.com/t6vb9ns645-boop/ecoflow/releases/tag/v1.0.0

@@ -155,7 +155,7 @@
   <header>
     <div>
       <p class="eyebrow">EcoFlow Balcony Power Plant — Dashboard</p>
-      <h1>PowerStream &amp; Delta 3 <span class="vbadge" id="versionBadge">v3.0</span></h1>
+      <h1>PowerStream &amp; Delta 3 <span class="vbadge" id="versionBadge">v3.1</span></h1>
     </div>
     <div class="meta" id="metaInfo">Lade Daten …</div>
   </header>
@@ -227,6 +227,17 @@
     </div>
 
     <div class="panel">
+      <h3>Systemleistung — Überblick</h3>
+      <div class="panel-sub">PV-Gesamt · AC-Hausverbrauch · Batterie-Leistung (W) im Zeitverlauf</div>
+      <div class="chart-box"><canvas id="sysChart"></canvas></div>
+      <div class="legend-row">
+        <span class="legend-item"><span class="dot" style="background:#F2A93B"></span>PV Gesamt (W)</span>
+        <span class="legend-item"><span class="dot" style="background:#E8EAED"></span>AC-Haus (W)</span>
+        <span class="legend-item"><span class="dot" style="background:#3FC1A6"></span>Batterie (W)</span>
+      </div>
+    </div>
+
+    <div class="panel">
       <h3>Tageszähler PV-Energie</h3>
       <div class="panel-sub">Kumulativ seit Mitternacht (Wh)</div>
       <div class="chart-box"><canvas id="cumChart"></canvas></div>
@@ -294,18 +305,12 @@
 </div>
 
 <script>
-/* ════════════════════════════════════════════════════════════════════════
-   EcoFlow BKW Dashboard — v3.0
-   Struktur: Momentaufnahme · Energie · Spannungen · Thermik · System ·
-             Datenqualität (dedizierter Diagnosebereich)
-   ════════════════════════════════════════════════════════════════════════ */
-const DASHBOARD_VERSION = 'v3.0';
+const DASHBOARD_VERSION = 'v3.1';
 const CSV_PATH = '../ecoflow_energie_daten.csv';
-const REFRESH_INTERVAL = 120; // Sekunden
+const REFRESH_INTERVAL = 120;
 
 let charts = {};
 
-/* ── Helpers ───────────────────────────────────────────────────────────── */
 function fmtLabel(t){
   const [datePart, timePart] = t.split('T');
   const d = datePart.split('-');
@@ -326,7 +331,6 @@ function g(cols, idx, key){ const i = idx[key]; if(i === undefined) return NaN; 
 const fmtVal = (v, unit, fallback='—') => isNaN(v) ? fallback : `${v}<span class="unit">${unit}</span>`;
 const fmtKpi = (v, unit, fallback='—') => isNaN(v) ? fallback : `${v} ${unit}`;
 
-/* ── CSV ───────────────────────────────────────────────────────────────── */
 function parseCsv(text){
   const lines = text.trim().split(/\r?\n/);
   const header = lines[0].split(',');
@@ -362,7 +366,6 @@ function parseCsv(text){
   return rows;
 }
 
-/* ── Chart defaults ────────────────────────────────────────────────────── */
 const CHART_DEFAULTS = {
   responsive:true, maintainAspectRatio:false,
   interaction:{ mode:'index', intersect:false },
@@ -377,12 +380,9 @@ const CHART_DEFAULTS = {
 const X_SCALE = { ticks:{ color:'#8A93A0', maxTicksLimit:8, font:{ family:"'IBM Plex Mono'", size:10 } }, grid:{ color:'#1B2430' } };
 const Y_SCALE = (label, color='#8A93A0') => ({ ticks:{ color, font:{ size:10 } }, grid:{ color:'#1B2430' }, title:{ display:true, text:label, color, font:{ size:11 } } });
 
-// null for NaN (missing), keeps 0 as 0 (legitimate zero-watt reading)
 function nn(v){ return isNaN(v) ? null : v; }
-// null for 0 or NaN — used where 0 means "API field not returned" (volt/temp)
 function vv(v){ return (v > 0) ? v : null; }
 
-/* ── Main render ───────────────────────────────────────────────────────── */
 function render(data, sourceLabel){
   destroyCharts();
   if(!data.length){
@@ -390,7 +390,6 @@ function render(data, sourceLabel){
     return;
   }
 
-  /* — Datenqualitäts-Analyse (zentral, einmal berechnet) — */
   const start = new Date(data[0].t);
   const end = new Date(data[data.length-1].t);
   const totalMs = end - start;
@@ -404,7 +403,6 @@ function render(data, sourceLabel){
   const validData = data.slice(validFromIdx);
   const lastRow = data[data.length-1];
 
-  /* ── 1 · Live-Momentaufnahme ──────────────────────────────────────────── */
   const pvNow = (lastRow.pv1_watt||0) + (lastRow.pv2_watt||0);
   const battW = lastRow.battery_power_watt;
   const charging = battW > 0;
@@ -431,7 +429,6 @@ function render(data, sourceLabel){
       <div class="sub">${charging?'lädt':(battW<0?'entlädt':'inaktiv')}</div>
     </div>`;
 
-  /* ── 2 · Energie-Charts ───────────────────────────────────────────────── */
   const pvFromIdx = data.findIndex(r => r.pv1_watt>0 || r.pv2_watt>0);
   const pvData = pvFromIdx >= 0 ? data.slice(pvFromIdx) : [];
   document.getElementById('pvSub').textContent = pvData.length
@@ -488,6 +485,18 @@ function render(data, sourceLabel){
     options:{ ...CHART_DEFAULTS, scales:{ x:X_SCALE, y:{ ...Y_SCALE('Watt'), beginAtZero:true } }}
   });
 
+  charts.sys = new Chart(document.getElementById('sysChart'), {
+    type:'line',
+    data:{ labels: validData.map(r=>fmtLabel(r.t)),
+      datasets:[
+        { label:'PV Gesamt (W)', data: validData.map(r=>r.pv1_watt+r.pv2_watt), borderColor:'#F2A93B', backgroundColor:'rgba(242,169,59,0.10)', fill:true, tension:0.2, pointRadius:0, borderWidth:2 },
+        { label:'AC-Haus (W)', data: validData.map(r=>r.ac_house_watt), borderColor:'#E8EAED', backgroundColor:'transparent', fill:false, tension:0.1, pointRadius:0, borderWidth:1.6 },
+        { label:'Batterie (W)', data: validData.map(r=>r.battery_power_watt), borderColor:'#3FC1A6', backgroundColor:'transparent', fill:false, tension:0.15, pointRadius:0, borderWidth:1.4, borderDash:[3,2] },
+      ]},
+    options:{ ...CHART_DEFAULTS,
+      scales:{ x:X_SCALE, y:{ ...Y_SCALE('Watt'), beginAtZero:false } }}
+  });
+
   charts.cum = new Chart(document.getElementById('cumChart'), {
     type:'line',
     data:{ labels: pvData.map(r=>fmtLabel(r.t)),
@@ -497,7 +506,6 @@ function render(data, sourceLabel){
       scales:{ x:X_SCALE, y:{ ...Y_SCALE('Wh'), beginAtZero:true } }}
   });
 
-  /* ── 3 · Spannungen ───────────────────────────────────────────────────── */
   document.getElementById('voltKpi').innerHTML = `
     <div class="kpi"><div class="lbl">PV1 Spannung</div><div class="val volt">${fmtKpi(lastRow.pv1_volt,'V')}</div></div>
     <div class="kpi"><div class="lbl">PV2 Spannung</div><div class="val volt">${fmtKpi(lastRow.pv2_volt,'V')}</div></div>
@@ -524,7 +532,6 @@ function render(data, sourceLabel){
         y2:{ ...Y_SCALE('WR-Ausgang (V)','#7C3AED'), position:'right', min:invMin, max:invMax, grid:{display:false} } }}
   });
 
-  /* ── 4 · Temperaturen ─────────────────────────────────────────────────── */
   document.getElementById('tempKpi').innerHTML = `
     <div class="kpi"><div class="lbl">PV1 Temperatur</div><div class="val temp">${fmtKpi(lastRow.pv1_temp_c,'°C')}</div></div>
     <div class="kpi"><div class="lbl">PV2 Temperatur</div><div class="val temp">${fmtKpi(lastRow.pv2_temp_c,'°C')}</div></div>
@@ -545,7 +552,6 @@ function render(data, sourceLabel){
     options:{ ...CHART_DEFAULTS, scales:{ x:X_SCALE, y:{ ...Y_SCALE('°C','#F87171'), min:tempMin, max:tempMax } }}
   });
 
-  /* ── 5 · System & Konnektivität ───────────────────────────────────────── */
   const rssi = lastRow.wifi_rssi;
   let rssiQuality = '—';
   if(!isNaN(rssi) && rssi<0){
@@ -557,7 +563,6 @@ function render(data, sourceLabel){
     <div class="kpi"><div class="lbl">Batterie-Limit unten</div><div class="val batt">${fmtKpi(lastRow.bat_lower_limit,'%')}</div></div>
     <div class="kpi"><div class="lbl">Batterie-Limit oben</div><div class="val batt">${fmtKpi(lastRow.bat_upper_limit,'%')}</div></div>`;
 
-  /* ── 6 · Datenqualität (dedizierter Bereich) ──────────────────────────── */
   const coverage = data.length ? (((data.length - zeroCount) / data.length) * 100) : 0;
   const deadHours = ((deadEnd - start) / 3600000);
   document.getElementById('dqGrid').innerHTML = `
@@ -601,23 +606,21 @@ function render(data, sourceLabel){
   if(zeroCount > 0){
     callout.className = 'callout';
     callout.innerHTML = `
-      <div class="ctitle">⚠ Nullwert-Phase zu Beginn der Aufzeichnung</div>
+      <div class="ctitle">&#9888; Nullwert-Phase zu Beginn der Aufzeichnung</div>
       <p>Die ersten <code>${zeroCount}</code> Messungen (von <code>${fmtLabel(data[0].t)}</code> bis <code>${fmtLabel(data[lastZeroIdx].t)}</code> Uhr, ≈ ${deadHours.toFixed(1)} h) enthalten ausschließlich Nullwerte. Ursache: die EcoFlow-API lieferte in dieser Phase leere Antworten. Ab <code>${fmtLabel(data[validFromIdx].t)}</code> Uhr liegen durchgehend gültige Werte vor — alle Diagramme oben beginnen erst ab diesem Zeitpunkt.</p>`;
   } else {
     callout.className = 'callout ok';
     callout.innerHTML = `
-      <div class="ctitle">✓ Keine Nullwert-Phase</div>
+      <div class="ctitle">&#10003; Keine Nullwert-Phase</div>
       <p>Alle ${data.length} Messungen enthalten mindestens einen gültigen Wert. Datenabdeckung 100 %.</p>`;
   }
 
-  /* ── Footer ───────────────────────────────────────────────────────────── */
   const schemaLabel = !isNaN(lastRow.pv1_temp_c) ? 'Schema v2 · alle Felder aktiv'
     : 'Schema v2 · Collector-Lauf ausstehend';
   document.getElementById('footerSource').textContent = `Quelle: ${sourceLabel} · ${schemaLabel} · Dashboard ${DASHBOARD_VERSION}`;
   document.getElementById('footerCount').textContent = data.length+' Zeilen';
 }
 
-/* ── Loader ────────────────────────────────────────────────────────────── */
 async function loadData(){
   setStatus('', 'Lade ' + CSV_PATH + ' …');
   try {
@@ -641,7 +644,6 @@ async function loadData(){
 document.getElementById('versionBadge').textContent = DASHBOARD_VERSION;
 loadData();
 
-/* ── Auto-Refresh ──────────────────────────────────────────────────────── */
 let countdown = REFRESH_INTERVAL;
 setInterval(() => {
   countdown--;
@@ -650,9 +652,6 @@ setInterval(() => {
   if (countdown <= 0) { countdown = REFRESH_INTERVAL; loadData(); }
 }, 1000);
 
-/* ── Cron-Job Forecast ─────────────────────────────────────────────────────
-   cron-job.org triggert alle 2 Minuten ("*\/2 * * * *")
-   Fetch-Zeitpunkte = alle geraden Minuten-Grenzen in den nächsten 60 min   */
 const CRON_INTERVAL_MS = 2 * 60 * 1000;
 const FORECAST_WINDOW_MS = 60 * 60 * 1000;
 
