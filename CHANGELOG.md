@@ -9,6 +9,21 @@ die Versionierung folgt grob [Semantic Versioning](https://semver.org/lang/de/).
 
 ---
 
+## [3.3.1] — 2026-06-24
+
+### Fixed
+- **Daten immer aktuell (Pages-Deploy-Pipeline)**: Der Data Collector triggert nach jedem
+  erfolgreichen Datenpush explizit den `deploy-pages.yml`-Workflow via `workflow_dispatch`.
+  Zuvor wurden Collector-Commits mit `[skip ci]` und Pfad-Filter vom Pages-Deploy
+  ausgeschlossen — GitHub Pages servierte daher das CSV eingefroren auf dem Stand des
+  letzten manuellen Deploys, nicht des letzten Daten-Commits.
+- **Staleness-Warnung im Dashboard**: Sind die neuesten Daten älter als 6 Minuten
+  (= 3 verpasste Abholungen), wechselt die Statusleiste auf Rot mit Meldung
+  „Daten sind X Minuten alt (3+ verpasste Abholungen)".
+  Bei aktuellen Daten zeigt die Statuszeile das Alter in Minuten.
+
+---
+
 ## [3.3.0] — 2026-06-24
 
 ### Added
@@ -210,6 +225,7 @@ Erste produktive Version (GitHub Actions Edition).
 - Erstes Chart.js-Dashboard auf GitHub Pages mit Auto-Refresh.
 - Berechnung der Tageserzeugung (Wh seit Mitternacht).
 
+[3.3.1]: https://github.com/t6vb9ns645-boop/ecoflow/releases/tag/v3.3.1
 [3.3.0]: https://github.com/t6vb9ns645-boop/ecoflow/releases/tag/v3.3.0
 [3.2.0]: https://github.com/t6vb9ns645-boop/ecoflow/releases/tag/v3.2.0
 [3.1.2]: https://github.com/t6vb9ns645-boop/ecoflow/releases/tag/v3.1.2

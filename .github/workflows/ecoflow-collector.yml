@@ -6,8 +6,10 @@ on:
   workflow_dispatch:
 
 # Schreibzugriff auf das Repository nötig, um CSV zu committen
+# actions:write nötig, um deploy-pages.yml nach Datenpush auszulösen
 permissions:
   contents: write
+  actions: write
 
 jobs:
   collect-data:
@@ -36,9 +38,21 @@ jobs:
         run: python ecoflow_tracker_github.py
 
       - name: Commit updated CSV to repository
+        id: commit
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add docs/ecoflow_energie_daten.csv
-          git diff --staged --quiet || git commit -m "data: add measurement $(date -u +%Y-%m-%dT%H:%M:%SZ) [skip ci]"
-          git push
+          if git diff --staged --quiet; then
+            echo "committed=false" >> $GITHUB_OUTPUT
+          else
+            git commit -m "data: add measurement $(date -u +%Y-%m-%dT%H:%M:%SZ) [skip ci]"
+            git push
+            echo "committed=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Trigger Pages deploy with fresh CSV
+        if: steps.commit.outputs.committed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run deploy-pages.yml --ref main
