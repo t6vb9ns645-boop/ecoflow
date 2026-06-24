@@ -56,3 +56,14 @@ jobs:
             --merge \
             --delete-branch
           echo "PR #${{ github.event.number }} gemergt"
+
+      - name: Pages-Deploy anstoßen
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # GITHUB_TOKEN-Merges triggern keine push-Events für Workflows.
+          # Deshalb den Deploy explizit auslösen (wie der Data Collector es tut).
+          gh workflow run deploy-pages.yml \
+            --repo "${{ github.repository }}" \
+            --ref main
+          echo "deploy-pages.yml angestossen"
