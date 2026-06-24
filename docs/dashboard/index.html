@@ -91,8 +91,28 @@
   .legend-item{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);font-family:'IBM Plex Mono',monospace;}
   .dot{width:9px;height:9px;border-radius:50%;display:inline-block;}
 
-  .section-label{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.12em;
-    text-transform:uppercase;color:var(--muted);margin:32px 0 12px;padding-bottom:8px;border-bottom:1px solid var(--hair);}
+  /* ── Forecast ── */
+  .forecast-card{background:var(--panel);border:1px solid var(--hair);border-radius:10px;
+    padding:16px 20px 14px;margin-bottom:22px;}
+  .forecast-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;}
+  .forecast-title{font-family:'IBM Plex Mono',monospace;font-size:11px;text-transform:uppercase;
+    letter-spacing:.08em;color:var(--muted);}
+  .forecast-next{font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--solar);font-weight:600;}
+  .fc-track{position:relative;height:44px;background:#0D1820;border-radius:6px;overflow:visible;margin-bottom:6px;}
+  .fc-now{position:absolute;top:-6px;bottom:-6px;width:2px;background:var(--warn);border-radius:1px;z-index:3;pointer-events:none;}
+  .fc-now::after{content:'JETZT';position:absolute;top:-18px;left:50%;transform:translateX(-50%);
+    font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--warn);letter-spacing:.06em;white-space:nowrap;}
+  .fc-tick{position:absolute;top:0;bottom:0;width:2px;border-radius:1px;transition:background .3s;}
+  .fc-tick.past{background:#1A2840;}
+  .fc-tick.next{background:var(--solar);box-shadow:0 0 6px var(--solar);z-index:2;}
+  .fc-tick.future{background:#2A4060;}
+  .fc-tick.soon{background:#5A7CA0;}
+  .fc-label-row{display:flex;justify-content:space-between;font-family:'IBM Plex Mono',monospace;
+    font-size:10px;color:var(--muted);margin-top:4px;padding:0 1px;}
+  .fc-upcoming{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
+  .fc-pill{font-family:'IBM Plex Mono',monospace;font-size:11px;padding:3px 9px;border-radius:20px;
+    background:#1A2840;color:var(--muted);border:1px solid var(--hair);}
+  .fc-pill.fc-pill-next{background:rgba(242,169,59,.12);color:var(--solar);border-color:rgba(242,169,59,.3);}
 
   footer{margin-top:36px;padding-top:16px;border-top:1px solid var(--hair);
     font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);
@@ -118,6 +138,19 @@
       <span id="refreshCountdown" style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);">Aktualisierung in 120s</span>
       <button onclick="loadData();countdown=120;">↻ Neu laden</button>
     </div>
+  </div>
+
+  <!-- ── Forecast ── -->
+  <div class="forecast-card">
+    <div class="forecast-header">
+      <span class="forecast-title">Datenabholungen — nächste 60 Minuten (alle 2 min via cron-job.org)</span>
+      <span class="forecast-next" id="fcNext">—</span>
+    </div>
+    <div class="fc-track" id="fcTrack">
+      <div class="fc-now" id="fcNow"></div>
+    </div>
+    <div class="fc-label-row" id="fcLabels"></div>
+    <div class="fc-upcoming" id="fcUpcoming"></div>
   </div>
 
   <div class="timeline-card">
@@ -529,6 +562,103 @@ setInterval(() => {
     loadData();
   }
 }, 1000);
+
+/* ── Cron-Job Forecast ──────────────────────────────────────────────────────
+   cron-job.org triggers every 2 minutes: */2 * * * *
+   → fetch times = all even-minute boundaries within the next 60 min
+   ────────────────────────────────────────────────────────────────────────── */
+const CRON_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes
+const FORECAST_WINDOW_MS = 60 * 60 * 1000; // 60 minutes
+
+function nextCronTimes(fromDate, windowMs, intervalMs) {
+  const times = [];
+  // Align to the last even-minute boundary
+  const base = Math.floor(fromDate.getTime() / intervalMs) * intervalMs;
+  for (let t = base; t <= fromDate.getTime() + windowMs; t += intervalMs) {
+    times.push(new Date(t));
+  }
+  return times;
+}
+
+function fmtTime(d) {
+  return d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+}
+
+function fmtCountdown(ms) {
+  if (ms <= 0) return 'jetzt';
+  const s = Math.round(ms / 1000);
+  if (s < 60) return `in ${s}s`;
+  return `in ${Math.floor(s / 60)}m ${s % 60}s`;
+}
+
+function updateForecast() {
+  const now = new Date();
+  const windowStart = now;
+  const windowEnd = new Date(now.getTime() + FORECAST_WINDOW_MS);
+  const ticks = nextCronTimes(now, FORECAST_WINDOW_MS, CRON_INTERVAL_MS);
+
+  // Find next fetch (first tick that's in the future)
+  const nextFetch = ticks.find(t => t > now);
+  const secsToNext = nextFetch ? Math.round((nextFetch - now) / 1000) : 0;
+
+  // Update next-fetch label
+  const fcNextEl = document.getElementById('fcNext');
+  if (fcNextEl && nextFetch) {
+    fcNextEl.textContent = `Nächste Abholung: ${fmtTime(nextFetch)} (${fmtCountdown(nextFetch - now)})`;
+  }
+
+  // Build timeline ticks
+  const track = document.getElementById('fcTrack');
+  const nowMarker = document.getElementById('fcNow');
+  if (!track || !nowMarker) return;
+
+  // Remove old ticks (keep the .fc-now marker)
+  track.querySelectorAll('.fc-tick').forEach(el => el.remove());
+
+  const totalMs = FORECAST_WINDOW_MS;
+
+  ticks.forEach((t, i) => {
+    if (t < windowStart || t > windowEnd) return;
+    const pct = ((t - windowStart) / totalMs) * 100;
+    const div = document.createElement('div');
+    div.className = 'fc-tick';
+    const isPast = t <= now;
+    const isNext = t === nextFetch;
+    const isSoon = !isPast && !isNext && (t - now) <= 10 * 60 * 1000;
+    div.className = `fc-tick ${isPast ? 'past' : isNext ? 'next' : isSoon ? 'soon' : 'future'}`;
+    div.style.left = `calc(${pct}% - 1px)`;
+    div.title = fmtTime(t);
+    track.appendChild(div);
+  });
+
+  // Move "JETZT" marker
+  nowMarker.style.left = '0%';
+
+  // Axis labels: every 10 minutes
+  const labelsEl = document.getElementById('fcLabels');
+  if (labelsEl) {
+    labelsEl.innerHTML = '';
+    for (let i = 0; i <= 6; i++) {
+      const t = new Date(now.getTime() + i * 10 * 60 * 1000);
+      const span = document.createElement('span');
+      span.textContent = fmtTime(t);
+      labelsEl.appendChild(span);
+    }
+  }
+
+  // Upcoming pills: next 6 fetches
+  const upEl = document.getElementById('fcUpcoming');
+  if (upEl) {
+    const upcoming = ticks.filter(t => t >= now).slice(0, 6);
+    upEl.innerHTML = upcoming.map((t, i) => {
+      const cls = i === 0 ? 'fc-pill fc-pill-next' : 'fc-pill';
+      return `<span class="${cls}">${fmtTime(t)} <span style="opacity:.6">${fmtCountdown(t - now)}</span></span>`;
+    }).join('');
+  }
+}
+
+updateForecast();
+setInterval(updateForecast, 1000);
 </script>
 </body>
 </html>
