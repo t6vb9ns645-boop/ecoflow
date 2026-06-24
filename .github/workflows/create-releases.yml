@@ -8,6 +8,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      workflows: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -20,9 +21,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
 
-      - name: Create and push tags
+      - name: Push v1.0.0 tag
         run: |
-          git tag -a v1.0.0 b14c62b -m "v1.0 initial GitHub Actions edition, 7 fields"
-          git tag -a v2.0.0 c752978 -m "v2.0 all API metrics 20 fields, CSV migration, forecast panel"
-          git tag -a v3.0.0 2af4ac3 -m "v3.0 professional dashboard restructure, 6 sections, CHANGELOG"
-          git push origin v1.0.0 v2.0.0 v3.0.0
+          git tag -a v1.0.0 b14c62b -m "v1.0 initial GitHub Actions edition, 7 fields" || true
+          git push origin v1.0.0
