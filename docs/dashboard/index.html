@@ -486,33 +486,52 @@ function render(data, sourceLabel){
   });
 
   // ── Spannungen ──
+  // Voltage helper: treat 0 V as null (API didn't return the field).
+  // 0 V on a ~28 V axis collapses the visible range to a flat line.
+  const vv = v => (v > 0) ? v : null;
+
+  // Compute tight bounds from non-zero data, with physical fallbacks.
+  const pvVolts = validData.flatMap(r=>[r.pv1_volt,r.pv2_volt]).filter(v=>v>0);
+  const invVolts = validData.map(r=>r.inv_volt).filter(v=>v>0);
+  const pvMin  = pvVolts.length  ? Math.floor(Math.min(...pvVolts)  - 2) : 0;
+  const pvMax  = pvVolts.length  ? Math.ceil (Math.max(...pvVolts)  + 2) : 45;
+  const invMin = invVolts.length ? Math.floor(Math.min(...invVolts) - 2) : 220;
+  const invMax = invVolts.length ? Math.ceil (Math.max(...invVolts) + 2) : 250;
+
   charts.volt = new Chart(document.getElementById('voltChart'), {
     type:'line',
     data:{ labels: validData.map(r=>fmtLabel(r.t)),
       datasets:[
-        { label:'PV1 (V)', data: validData.map(r=>nn(r.pv1_volt)), borderColor:'#A78BFA', backgroundColor:'transparent', fill:false, tension:0.2, pointRadius:0, borderWidth:1.8, yAxisID:'y' },
-        { label:'PV2 (V)', data: validData.map(r=>nn(r.pv2_volt)), borderColor:'#C4B5FD', backgroundColor:'transparent', fill:false, tension:0.2, pointRadius:0, borderWidth:1.4, yAxisID:'y' },
-        { label:'WR-Ausgang (V)', data: validData.map(r=>nn(r.inv_volt)), borderColor:'#7C3AED', backgroundColor:'transparent', fill:false, tension:0.1, pointRadius:0, borderWidth:1.4, borderDash:[4,3], yAxisID:'y2' }
+        { label:'PV1 (V)', data: validData.map(r=>vv(r.pv1_volt)), borderColor:'#A78BFA', backgroundColor:'rgba(167,139,250,0.10)', fill:true,  tension:0.2, pointRadius:0, borderWidth:1.8, yAxisID:'y' },
+        { label:'PV2 (V)', data: validData.map(r=>vv(r.pv2_volt)), borderColor:'#C4B5FD', backgroundColor:'transparent',             fill:false, tension:0.2, pointRadius:0, borderWidth:1.4, yAxisID:'y' },
+        { label:'WR-Ausgang (V)', data: validData.map(r=>vv(r.inv_volt)), borderColor:'#7C3AED', backgroundColor:'transparent',      fill:false, tension:0.1, pointRadius:0, borderWidth:1.4, borderDash:[4,3], yAxisID:'y2' }
       ]},
     options:{ ...CHART_DEFAULTS,
       scales:{
         x: X_SCALE,
-        y: { ...Y_SCALE('PV1 / PV2 (V)','#A78BFA'), position:'left' },
-        y2:{ ...Y_SCALE('WR-Ausgang (V)','#7C3AED'), position:'right', grid:{display:false} }
+        y:  { ...Y_SCALE('PV1 / PV2 (V)','#A78BFA'), position:'left',  min:pvMin,  max:pvMax  },
+        y2: { ...Y_SCALE('WR-Ausgang (V)','#7C3AED'), position:'right', min:invMin, max:invMax, grid:{display:false} }
       }}
   });
 
   // ── Temperaturen ──
+  // Temperature helper: treat 0 °C as null (API didn't return the field).
+  const tt = v => (v > 0) ? v : null;
+
+  const temps = validData.flatMap(r=>[r.pv1_temp_c,r.pv2_temp_c,r.inv_temp_c]).filter(v=>v>0);
+  const tempMin = temps.length ? Math.floor(Math.min(...temps) - 3) : 0;
+  const tempMax = temps.length ? Math.ceil (Math.max(...temps) + 3) : 80;
+
   charts.temp = new Chart(document.getElementById('tempChart'), {
     type:'line',
     data:{ labels: validData.map(r=>fmtLabel(r.t)),
       datasets:[
-        { label:'PV1 (°C)', data: validData.map(r=>nn(r.pv1_temp_c)), borderColor:'#F87171', backgroundColor:'rgba(248,113,113,0.08)', fill:true, tension:0.25, pointRadius:0, borderWidth:1.8 },
-        { label:'PV2 (°C)', data: validData.map(r=>nn(r.pv2_temp_c)), borderColor:'#FCA5A5', backgroundColor:'transparent', fill:false, tension:0.25, pointRadius:0, borderWidth:1.4, borderDash:[3,2] },
-        { label:'WR/LLC (°C)', data: validData.map(r=>nn(r.inv_temp_c)), borderColor:'#FB923C', backgroundColor:'transparent', fill:false, tension:0.2, pointRadius:0, borderWidth:1.6 },
+        { label:'PV1 (°C)', data: validData.map(r=>tt(r.pv1_temp_c)), borderColor:'#F87171', backgroundColor:'rgba(248,113,113,0.08)', fill:true,  tension:0.25, pointRadius:0, borderWidth:1.8 },
+        { label:'PV2 (°C)', data: validData.map(r=>tt(r.pv2_temp_c)), borderColor:'#FCA5A5', backgroundColor:'transparent',             fill:false, tension:0.25, pointRadius:0, borderWidth:1.4, borderDash:[3,2] },
+        { label:'WR/LLC (°C)', data: validData.map(r=>tt(r.inv_temp_c)), borderColor:'#FB923C', backgroundColor:'transparent',          fill:false, tension:0.2,  pointRadius:0, borderWidth:1.6 },
       ]},
     options:{ ...CHART_DEFAULTS,
-      scales:{ x: X_SCALE, y: Y_SCALE('°C','#F87171') }}
+      scales:{ x: X_SCALE, y: { ...Y_SCALE('°C','#F87171'), min:tempMin, max:tempMax } }}
   });
 
   const schemaLabel = !isNaN(lastRow.pv1_temp_c)
