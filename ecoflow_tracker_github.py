@@ -24,7 +24,7 @@ POWERSTREAM_SN = os.environ.get("POWERSTREAM_SN", "")
 DELTA3_SN = os.environ.get("DELTA3_SN", "")
 
 ECOFLOW_API_BASE = "https://api-e.ecoflow.com"
-CSV_FILENAME = "ecoflow_energie_daten.csv"
+CSV_FILENAME = "docs/ecoflow_energie_daten.csv"
 CSV_FIELDNAMES = [
     "timestamp", "pv1_watt", "pv2_watt", "ac_house_watt",
     "battery_soc_percent", "battery_power_watt", "total_pv_wh_daily"
