@@ -9,6 +9,26 @@ die Versionierung folgt grob [Semantic Versioning](https://semver.org/lang/de/).
 
 ---
 
+## [3.2.0] — 2026-06-24
+
+### Added
+- **Tagesenergie-KPIs in Sektion „02 Energie"**: Vier neue Kennzahlen werden
+  oberhalb der Graphen als Hero-Kacheln (identische Darstellung wie
+  „01 Live-Momentaufnahme") angezeigt:
+  - **Energieproduktion heute** — kumulierte PV-Erzeugung (PV1 + PV2) seit
+    Mitternacht in Wh/kWh, direkt aus dem bereits berechneten
+    `total_pv_wh_daily`-Feld.
+  - **Energieverbrauch heute** — Energie aus Smart Plugs + Grundlast
+    (`inv_to_plug_watt + permanent_watt` × Δt), in Wh/kWh.
+  - **Energie aus Batterie heute** — kumulierte Entladeleistung
+    (`battery_power_watt < 0`) seit Mitternacht, in Wh/kWh.
+  - **Netzeinspeisung heute** — berechneter Überschuss, der ins Stromnetz
+    eingespeist wird (PV − Verbrauch − Batterieladung), in Wh/kWh.
+- Werte ≥ 1000 Wh werden automatisch als kWh (zweistellig) dargestellt.
+- Dashboard-Version auf `v3.2.0` aktualisiert.
+
+---
+
 ## [3.1.2] — 2026-06-24
 
 ### Fixed
@@ -130,6 +150,7 @@ Erste produktive Version (GitHub Actions Edition).
 - Erstes Chart.js-Dashboard auf GitHub Pages mit Auto-Refresh.
 - Berechnung der Tageserzeugung (Wh seit Mitternacht).
 
+[3.2.0]: https://github.com/t6vb9ns645-boop/ecoflow/releases/tag/v3.2.0
 [3.1.2]: https://github.com/t6vb9ns645-boop/ecoflow/releases/tag/v3.1.2
 [3.1.1]: https://github.com/t6vb9ns645-boop/ecoflow/releases/tag/v3.1.1
 [3.1.0]: https://github.com/t6vb9ns645-boop/ecoflow/releases/tag/v3.1.0
