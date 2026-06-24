@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>EcoFlow BKW — Dashboard v3.3.1</title>
+<title>EcoFlow BKW — Dashboard v3.3.2</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
@@ -353,7 +353,7 @@
 </div>
 
 <script>
-const DASHBOARD_VERSION = 'v3.3.1';
+const DASHBOARD_VERSION = 'v3.3.2';
 const CSV_PATH = '../ecoflow_energie_daten.csv';
 const REFRESH_INTERVAL = 120;
 
@@ -720,11 +720,21 @@ function render(data, sourceLabel, rawRows, preset){
       }}
   });
 
+  const cumData = (function() {
+    let total = 0;
+    return pvData.map((r, i) => {
+      if (i > 0) {
+        const dt = (new Date(r.t) - new Date(pvData[i-1].t)) / 3600000;
+        if (dt > 0 && dt <= 0.1) total += ((r.pv1_watt||0) + (r.pv2_watt||0)) * dt;
+      }
+      return Math.round(total * 10) / 10;
+    });
+  })();
   charts.cum = new Chart(document.getElementById('cumChart'), {
     type:'line',
     data:{ labels: pvData.map(r=>fmtLabel(r.t)),
-      datasets:[{ label:'PV gesamt heute (Wh)', data: pvData.map(r=>r.total_pv_wh_daily), borderColor:'#3FC1A6',
-        backgroundColor:'rgba(63,193,166,0.10)', fill:true, tension:0.15, pointRadius:0, borderWidth:1.8, stepped:'before' }]},
+      datasets:[{ label:'PV gesamt (Wh)', data: cumData, borderColor:'#3FC1A6',
+        backgroundColor:'rgba(63,193,166,0.10)', fill:true, tension:0.15, pointRadius:0, borderWidth:1.8 }]},
     options:{ ...CHART_DEFAULTS, plugins:{ ...CHART_DEFAULTS.plugins, legend:{display:false} },
       scales:{ x:X_SCALE, y:{ ...Y_SCALE('Wh'), beginAtZero:true } }}
   });
