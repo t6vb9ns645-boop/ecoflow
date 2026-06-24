@@ -21,13 +21,18 @@ from datetime import datetime
 ECOFLOW_ACCESS_KEY = os.environ.get("ECOFLOW_ACCESS_KEY", "")
 ECOFLOW_SECRET_KEY = os.environ.get("ECOFLOW_SECRET_KEY", "")
 POWERSTREAM_SN = os.environ.get("POWERSTREAM_SN", "")
-DELTA3_SN = os.environ.get("DELTA3_SN", "")
+DELTA3_SN = os.environ.get("DELTA3_SN", "")  # optional
 
 ECOFLOW_API_BASE = "https://api-e.ecoflow.com"
 CSV_FILENAME = "docs/ecoflow_energie_daten.csv"
+
+# Bump this whenever CSV_FIELDNAMES changes — triggers automatic migration.
+CSV_SCHEMA_VERSION = 2
+
 CSV_FIELDNAMES = [
     "timestamp", "pv1_watt", "pv2_watt", "ac_house_watt",
     "battery_soc_percent", "battery_power_watt", "total_pv_wh_daily",
+    # v2: extended metrics
     "pv1_temp_c", "pv2_temp_c", "inv_temp_c",
     "grid_cons_watt", "inv_to_plug_watt", "permanent_watt", "pv_to_inv_watt",
     "pv1_volt", "pv2_volt", "inv_volt",
@@ -50,11 +55,11 @@ def validate_config():
     if not ECOFLOW_ACCESS_KEY: missing.append("ECOFLOW_ACCESS_KEY")
     if not ECOFLOW_SECRET_KEY: missing.append("ECOFLOW_SECRET_KEY")
     if not POWERSTREAM_SN:     missing.append("POWERSTREAM_SN")
-    if not DELTA3_SN:          missing.append("DELTA3_SN")
+    # DELTA3_SN is optional — no check here
     if missing:
         log("ERROR", f"Fehlende GitHub Secrets: {', '.join(missing)}")
         return False
-    log("INFO", "✓ Alle Secrets vorhanden")
+    log("INFO", f"✓ Konfiguration OK (DELTA3_SN: {'gesetzt' if DELTA3_SN else 'nicht gesetzt, wird übersprungen'})")
     return True
 
 # =============================================================================
@@ -64,8 +69,7 @@ def validate_config():
 def generate_nonce():
     return str(random.randint(100000, 999999))
 
-def generate_signature(access_key, secret_key, nonce, timestamp, query_params=None):
-    # GET requests: sign only auth params (no URL query params)
+def generate_signature(access_key, secret_key, nonce, timestamp):
     sign_str = f"accessKey={access_key}&nonce={nonce}&timestamp={timestamp}"
     log("DEBUG", f"Sign string: accessKey=***&nonce={nonce}&timestamp={timestamp}")
     return hmac.new(
@@ -107,13 +111,10 @@ def query_device(sn, device_name):
             if code == "0":
                 result = data.get("data", {})
                 log("INFO", f"✓ {device_name}: {len(result)} Felder empfangen")
-
-                # Debug: alle Felder ausgeben (wichtig für Feldnamen-Diagnose)
                 log("DEBUG", f"--- {device_name} ROHDATEN ---")
                 for key in sorted(result.keys()):
                     log("DEBUG", f"  {key} = {result[key]}")
                 log("DEBUG", f"--- ENDE {device_name} ---")
-
                 return result
             else:
                 log("ERROR", f"API Fehler: {data}")
@@ -140,72 +141,128 @@ def safe_float(value, divisor=1):
     except (TypeError, ValueError):
         return 0.0
 
+def get_field(data, *keys, default=0):
+    """
+    Gibt den Wert des ersten Schlüssels zurück, der in data vorhanden und
+    nicht None ist. Unterscheidet explizit zwischen fehlendem Schlüssel und
+    gültigem 0-Wert (anders als 'or'-Verkettung, die 0 als falsy behandelt).
+    """
+    for key in keys:
+        v = data.get(key)
+        if v is not None:
+            return v
+    return default
+
 def extract_powerstream(data):
     """
-    Extrahiert PowerStream-Werte.
-    Feldnamen der EcoFlow Open Platform für PowerStream (HMI):
-      20_1.pv1InputWatts  - PV1 Eingangsleistung (W)
-      20_1.pv2InputWatts  - PV2 Eingangsleistung (W)
-      20_1.invOutputWatts - Wechselrichter Ausgang zum Hausnetz (W)
-    Fallback auf alternative Schreibweisen falls API-Version abweicht.
+    Extrahiert PowerStream-Werte aus der EcoFlow Open Platform API.
+
+    Alle Leistungs-, Spannungs- und Temperaturwerte sind als Integer×10
+    kodiert (z. B. 250 → 25.0 W / V / °C), daher divisor=10.
+    Batterie-SOC und Limits sind direkte Prozentwerte.
     """
-    pv1 = data.get("20_1.pv1InputWatts") or data.get("pv1InputWatts") or 0
-    pv2 = data.get("20_1.pv2InputWatts") or data.get("pv2InputWatts") or 0
-    ac  = data.get("20_1.invOutputWatts") or data.get("invOutputWatts") or 0
+    pv1      = get_field(data, "20_1.pv1InputWatts",  "pv1InputWatts")
+    pv2      = get_field(data, "20_1.pv2InputWatts",  "pv2InputWatts")
+    ac       = get_field(data, "20_1.invOutputWatts",  "invOutputWatts")
+    bat_soc  = get_field(data, "20_1.batSoc",          "batSoc")
+    bat_w    = get_field(data, "20_1.batInputWatts",   "batInputWatts")
 
-    # Batterie-Daten kommen vom PowerStream (angeschlossene Batterie)
-    bat_soc   = data.get("20_1.batSoc") or data.get("batSoc") or 0
-    bat_watts = data.get("20_1.batInputWatts") or data.get("batInputWatts") or 0
+    pv1_t    = get_field(data, "20_1.pv1Temp",         "pv1Temp")
+    pv2_t    = get_field(data, "20_1.pv2Temp",         "pv2Temp")
+    inv_t    = get_field(data, "20_1.llcTemp",          "llcTemp")
+    grid_w   = get_field(data, "20_1.gridConsWatts",   "gridConsWatts")
+    plug_w   = get_field(data, "20_1.invToPlugWatts",  "invToPlugWatts")
+    perm_w   = get_field(data, "20_1.permanentWatts",  "permanentWatts")
+    pv2inv_w = get_field(data, "20_1.pvToInvWatts",    "pvToInvWatts")
+    pv1_v    = get_field(data, "20_1.pv1InputVolt",    "pv1InputVolt")
+    pv2_v    = get_field(data, "20_1.pv2InputVolt",    "pv2InputVolt")
+    inv_v    = get_field(data, "20_1.invOpVolt",        "invOpVolt")
+    bat_lo   = get_field(data, "20_1.lowerLimit",       "lowerLimit")
+    bat_hi   = get_field(data, "20_1.upperLimit",       "upperLimit")
+    wifi     = get_field(data, "20_1.wifiRssi",         "wifiRssi")
 
-    log("INFO", f"PowerStream Rohwerte: pv1={pv1}, pv2={pv2}, ac={ac}, bat_soc={bat_soc}, bat_w={bat_watts}")
+    log("INFO", f"PowerStream: pv1={pv1}, pv2={pv2}, ac={ac}, soc={bat_soc}, bat={bat_w}")
+    log("INFO", f"  temps: pv1={pv1_t}, pv2={pv2_t}, inv={inv_t}")
+    log("INFO", f"  volts: pv1={pv1_v}, pv2={pv2_v}, inv={inv_v}")
+    log("INFO", f"  flow:  grid={grid_w}, plug={plug_w}, perm={perm_w}, pv2inv={pv2inv_w}")
+    log("INFO", f"  limits: lo={bat_lo}%, hi={bat_hi}% | rssi={wifi} dBm")
+
     return {
-        "pv1_watt": safe_float(pv1, divisor=10),
-        "pv2_watt": safe_float(pv2, divisor=10),
-        "ac_house_watt": safe_float(ac, divisor=10),
+        "pv1_watt":          safe_float(pv1,      divisor=10),
+        "pv2_watt":          safe_float(pv2,      divisor=10),
+        "ac_house_watt":     safe_float(ac,       divisor=10),
         "battery_soc_percent": safe_float(bat_soc),
-        "battery_power_watt": safe_float(bat_watts, divisor=10),
-        # Temperaturen (÷10 = °C)
-        "pv1_temp_c": safe_float(data.get("20_1.pv1Temp") or data.get("pv1Temp") or 0, divisor=10),
-        "pv2_temp_c": safe_float(data.get("20_1.pv2Temp") or data.get("pv2Temp") or 0, divisor=10),
-        "inv_temp_c": safe_float(data.get("20_1.llcTemp") or data.get("llcTemp") or 0, divisor=10),
-        # Netzleistungen (÷10 = W)
-        "grid_cons_watt": safe_float(data.get("20_1.gridConsWatts") or data.get("gridConsWatts") or 0, divisor=10),
-        "inv_to_plug_watt": safe_float(data.get("20_1.invToPlugWatts") or data.get("invToPlugWatts") or 0, divisor=10),
-        "permanent_watt": safe_float(data.get("20_1.permanentWatts") or data.get("permanentWatts") or 0, divisor=10),
-        "pv_to_inv_watt": safe_float(data.get("20_1.pvToInvWatts") or data.get("pvToInvWatts") or 0, divisor=10),
-        # Spannungen (÷10 = V)
-        "pv1_volt": safe_float(data.get("20_1.pv1InputVolt") or data.get("pv1InputVolt") or 0, divisor=10),
-        "pv2_volt": safe_float(data.get("20_1.pv2InputVolt") or data.get("pv2InputVolt") or 0, divisor=10),
-        "inv_volt": safe_float(data.get("20_1.invOpVolt") or data.get("invOpVolt") or 0, divisor=10),
-        # Batterie-Limits & WLAN
-        "bat_lower_limit": safe_float(data.get("20_1.lowerLimit") or data.get("lowerLimit") or 0),
-        "bat_upper_limit": safe_float(data.get("20_1.upperLimit") or data.get("upperLimit") or 0),
-        "wifi_rssi": safe_float(data.get("20_1.wifiRssi") or data.get("wifiRssi") or 0),
+        "battery_power_watt":  safe_float(bat_w,  divisor=10),
+        "pv1_temp_c":        safe_float(pv1_t,    divisor=10),
+        "pv2_temp_c":        safe_float(pv2_t,    divisor=10),
+        "inv_temp_c":        safe_float(inv_t,    divisor=10),
+        "grid_cons_watt":    safe_float(grid_w,   divisor=10),
+        "inv_to_plug_watt":  safe_float(plug_w,   divisor=10),
+        "permanent_watt":    safe_float(perm_w,   divisor=10),
+        "pv_to_inv_watt":    safe_float(pv2inv_w, divisor=10),
+        "pv1_volt":          safe_float(pv1_v,    divisor=10),
+        "pv2_volt":          safe_float(pv2_v,    divisor=10),
+        "inv_volt":          safe_float(inv_v,    divisor=10),
+        "bat_lower_limit":   safe_float(bat_lo),
+        "bat_upper_limit":   safe_float(bat_hi),
+        "wifi_rssi":         safe_float(wifi),
     }
 
 def extract_delta3(data):
     """
     Extrahiert Delta 3 / Delta 3 Plus Batteriewerte.
-    Feldnamen je nach Gerätegeneration:
-      bmsMaster.soc        - Ladestand (%)
-      pd.wattsInSum        - Ladeleistung (W)
-      pd.wattsOutSum       - Entladeleistung (W)
+    pd.wattsInSum / pd.wattsOutSum sind direkte Wattwerte (kein ÷10).
     """
-    soc = (data.get("bmsMaster.soc")
-           or data.get("bms_bmsStatus.soc")
-           or data.get("bms.soc")
-           or 0)
+    soc = get_field(data, "bmsMaster.soc", "bms_bmsStatus.soc", "bms.soc")
+    power_in  = safe_float(get_field(data, "pd.wattsInSum",  "bmsMaster.inputWatts"))
+    power_out = safe_float(get_field(data, "pd.wattsOutSum", "bmsMaster.outputWatts"))
+    battery_power = power_in - power_out if (power_in or power_out) else safe_float(get_field(data, "bms.power"))
 
-    power_in  = safe_float(data.get("pd.wattsInSum") or data.get("bmsMaster.inputWatts") or 0)
-    power_out = safe_float(data.get("pd.wattsOutSum") or data.get("bmsMaster.outputWatts") or 0)
-    # Netto: positiv = laden, negativ = entladen
-    battery_power = power_in - power_out if (power_in or power_out) else safe_float(data.get("bms.power") or 0)
-
-    log("INFO", f"Delta 3 Rohwerte: soc={soc}, power_in={power_in}, power_out={power_out}")
+    log("INFO", f"Delta 3: soc={soc}, in={power_in}W, out={power_out}W → netto={battery_power}W")
     return {
         "battery_soc_percent": safe_float(soc),
-        "battery_power_watt": battery_power,
+        "battery_power_watt":  battery_power,
     }
+
+# =============================================================================
+# CSV-MIGRATION
+# =============================================================================
+
+def migrate_csv_if_needed(csv_file):
+    """
+    Prüft ob der CSV-Header mit CSV_FIELDNAMES übereinstimmt.
+    Falls nicht (Schema-Änderung), wird die CSV neu geschrieben:
+    - Neuer Header mit allen aktuellen Feldern
+    - Alte Zeilen behalten ihre Werte; neue Spalten bleiben leer
+    Dies stellt sicher, dass das Dashboard neue Spalten per Index finden kann.
+    """
+    if not os.path.exists(csv_file):
+        return
+    try:
+        with open(csv_file, "r", newline="") as f:
+            reader = csv.DictReader(f)
+            old_fields = list(reader.fieldnames or [])
+            if old_fields == CSV_FIELDNAMES:
+                log("INFO", f"✓ CSV-Schema v{CSV_SCHEMA_VERSION} aktuell ({len(CSV_FIELDNAMES)} Felder)")
+                return
+            rows = list(reader)
+
+        added = [f for f in CSV_FIELDNAMES if f not in old_fields]
+        removed = [f for f in old_fields if f not in CSV_FIELDNAMES]
+        log("INFO", f"CSV-Schema veraltet: {len(old_fields)} → {len(CSV_FIELDNAMES)} Felder")
+        if added:   log("INFO", f"  + neu:     {added}")
+        if removed: log("INFO", f"  - entfernt: {removed}")
+        log("INFO", f"  Migriere {len(rows)} bestehende Zeilen …")
+
+        with open(csv_file, "w", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=CSV_FIELDNAMES, extrasaction="ignore")
+            writer.writeheader()
+            for row in rows:
+                writer.writerow(row)
+
+        log("INFO", f"✓ CSV-Migration abgeschlossen (v{CSV_SCHEMA_VERSION})")
+    except Exception as e:
+        log("ERROR", f"CSV-Migration fehlgeschlagen: {e}")
 
 # =============================================================================
 # TAGESERZEUGUNG
@@ -222,7 +279,8 @@ def calculate_daily_energy(csv_file):
             for row in csv.DictReader(f):
                 if row.get("timestamp", "").startswith(today):
                     try:
-                        total += (float(row.get("pv1_watt", 0)) + float(row.get("pv2_watt", 0))) / 60
+                        total += (float(row.get("pv1_watt", 0) or 0) +
+                                  float(row.get("pv2_watt", 0) or 0)) / 60
                     except ValueError:
                         pass
     except Exception as e:
@@ -230,10 +288,11 @@ def calculate_daily_energy(csv_file):
     return round(total, 2)
 
 # =============================================================================
-# CSV
+# CSV SCHREIBEN
 # =============================================================================
 
 def append_to_csv(data, csv_file):
+    """Hängt eine neue Zeile an die CSV an. Header nur bei neuer Datei."""
     file_exists = os.path.isfile(csv_file)
     try:
         with open(csv_file, "a", newline="") as f:
@@ -241,7 +300,7 @@ def append_to_csv(data, csv_file):
             if not file_exists:
                 writer.writeheader()
             writer.writerow(data)
-        log("INFO", f"💾 Gespeichert: {data}")
+        log("INFO", f"💾 Zeile gespeichert: {data['timestamp']}")
     except Exception as e:
         log("ERROR", f"CSV Fehler: {e}")
 
@@ -251,47 +310,49 @@ def append_to_csv(data, csv_file):
 
 def main():
     log("INFO", "=" * 60)
-    log("INFO", "EcoFlow Datentracker - GitHub Actions")
+    log("INFO", f"EcoFlow Datentracker v{CSV_SCHEMA_VERSION} - GitHub Actions")
     log("INFO", "=" * 60)
 
     if not validate_config():
         sys.exit(1)
 
+    # Schema-Migration vor jedem Lauf — idempotent und schnell
+    migrate_csv_if_needed(CSV_FILENAME)
+
     ps_data = query_device(POWERSTREAM_SN, "PowerStream")
     ps = extract_powerstream(ps_data)
 
-    # Delta 3 als optionaler Fallback — Batterie-Daten kommen primär vom PowerStream
     if DELTA3_SN:
         d3_data = query_device(DELTA3_SN, "Delta 3")
         d3 = extract_delta3(d3_data)
         if d3["battery_soc_percent"]:
             ps["battery_soc_percent"] = d3["battery_soc_percent"]
-            ps["battery_power_watt"] = d3["battery_power_watt"]
+            ps["battery_power_watt"]  = d3["battery_power_watt"]
 
     timestamp = datetime.now().isoformat(timespec="seconds")
-    daily_wh = calculate_daily_energy(CSV_FILENAME)
+    daily_wh  = calculate_daily_energy(CSV_FILENAME)
 
     row = {
-        "timestamp": timestamp,
-        "pv1_watt": ps["pv1_watt"],
-        "pv2_watt": ps["pv2_watt"],
-        "ac_house_watt": ps["ac_house_watt"],
+        "timestamp":           timestamp,
+        "pv1_watt":            ps["pv1_watt"],
+        "pv2_watt":            ps["pv2_watt"],
+        "ac_house_watt":       ps["ac_house_watt"],
         "battery_soc_percent": ps["battery_soc_percent"],
-        "battery_power_watt": ps["battery_power_watt"],
-        "total_pv_wh_daily": daily_wh,
-        "pv1_temp_c": ps["pv1_temp_c"],
-        "pv2_temp_c": ps["pv2_temp_c"],
-        "inv_temp_c": ps["inv_temp_c"],
-        "grid_cons_watt": ps["grid_cons_watt"],
-        "inv_to_plug_watt": ps["inv_to_plug_watt"],
-        "permanent_watt": ps["permanent_watt"],
-        "pv_to_inv_watt": ps["pv_to_inv_watt"],
-        "pv1_volt": ps["pv1_volt"],
-        "pv2_volt": ps["pv2_volt"],
-        "inv_volt": ps["inv_volt"],
-        "bat_lower_limit": ps["bat_lower_limit"],
-        "bat_upper_limit": ps["bat_upper_limit"],
-        "wifi_rssi": ps["wifi_rssi"],
+        "battery_power_watt":  ps["battery_power_watt"],
+        "total_pv_wh_daily":   daily_wh,
+        "pv1_temp_c":          ps["pv1_temp_c"],
+        "pv2_temp_c":          ps["pv2_temp_c"],
+        "inv_temp_c":          ps["inv_temp_c"],
+        "grid_cons_watt":      ps["grid_cons_watt"],
+        "inv_to_plug_watt":    ps["inv_to_plug_watt"],
+        "permanent_watt":      ps["permanent_watt"],
+        "pv_to_inv_watt":      ps["pv_to_inv_watt"],
+        "pv1_volt":            ps["pv1_volt"],
+        "pv2_volt":            ps["pv2_volt"],
+        "inv_volt":            ps["inv_volt"],
+        "bat_lower_limit":     ps["bat_lower_limit"],
+        "bat_upper_limit":     ps["bat_upper_limit"],
+        "wifi_rssi":           ps["wifi_rssi"],
     }
 
     append_to_csv(row, CSV_FILENAME)
@@ -299,6 +360,10 @@ def main():
     log("INFO", "")
     log("INFO", f"PV1: {ps['pv1_watt']} W | PV2: {ps['pv2_watt']} W | AC-Haus: {ps['ac_house_watt']} W")
     log("INFO", f"Batterie: {ps['battery_soc_percent']} % | {ps['battery_power_watt']} W")
+    log("INFO", f"Temp: PV1={ps['pv1_temp_c']}°C  PV2={ps['pv2_temp_c']}°C  WR={ps['inv_temp_c']}°C")
+    log("INFO", f"Volt: PV1={ps['pv1_volt']}V  PV2={ps['pv2_volt']}V  WR={ps['inv_volt']}V")
+    log("INFO", f"Netz: {ps['grid_cons_watt']} W | Stecker: {ps['inv_to_plug_watt']} W | PV→WR: {ps['pv_to_inv_watt']} W")
+    log("INFO", f"Batterie-Limits: {ps['bat_lower_limit']}% – {ps['bat_upper_limit']}% | RSSI: {ps['wifi_rssi']} dBm")
     log("INFO", f"Tageserzeugung: {daily_wh} Wh")
     log("INFO", "✅ Fertig")
 
