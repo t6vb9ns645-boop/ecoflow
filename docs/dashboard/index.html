@@ -307,7 +307,7 @@
 </div>
 
 <script>
-const DASHBOARD_VERSION = 'v3.2.0';
+const DASHBOARD_VERSION = 'v3.2.1';
 const CSV_PATH = '../ecoflow_energie_daten.csv';
 const REFRESH_INTERVAL = 120;
 
@@ -426,8 +426,8 @@ function render(data, sourceLabel){
     return v + '<span class="unit">Wh</span>';
   }
 
-  // 1. Produktion: bereits als Tagessumme in CSV gespeichert
-  const energyProdWh = todayRows.length > 0 ? todayRows[todayRows.length - 1].total_pv_wh_daily : 0;
+  // 1. Produktion: zeitgewichtet integriert (gleiche Methode wie alle anderen KPIs)
+  const energyProdWh = calcEnergyWh(todayRows, r => (r.pv1_watt || 0) + (r.pv2_watt || 0));
 
   // 2. Verbrauch: Smart Plugs + Grundlast (inv→plug + permanent)
   const energyConsWh = calcEnergyWh(todayRows, r => {

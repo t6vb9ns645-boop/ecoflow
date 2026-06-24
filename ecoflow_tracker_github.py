@@ -271,20 +271,30 @@ def migrate_csv_if_needed(csv_file):
 # =============================================================================
 
 def calculate_daily_energy(csv_file):
-    """Berechnet Tageserzeugung aus CSV (PV-Wh seit Mitternacht)."""
+    """Berechnet Tageserzeugung aus CSV (PV-Wh seit Mitternacht), zeitgewichtet."""
     if not os.path.exists(csv_file):
         return 0.0
     today = datetime.now(HAMBURG_TZ).strftime("%Y-%m-%d")
     total = 0.0
+    prev_ts = None
     try:
         with open(csv_file, "r") as f:
             for row in csv.DictReader(f):
-                if row.get("timestamp", "").startswith(today):
-                    try:
-                        total += (float(row.get("pv1_watt", 0) or 0) +
-                                  float(row.get("pv2_watt", 0) or 0)) / 60
-                    except ValueError:
-                        pass
+                ts_str = row.get("timestamp", "")
+                if not ts_str.startswith(today):
+                    prev_ts = None
+                    continue
+                try:
+                    ts = datetime.fromisoformat(ts_str)
+                    if prev_ts is not None:
+                        dt_h = (ts - prev_ts).total_seconds() / 3600
+                        if 0 < dt_h <= 0.1:  # max 6-min-Lücke akzeptieren
+                            pv = (float(row.get("pv1_watt", 0) or 0) +
+                                  float(row.get("pv2_watt", 0) or 0))
+                            total += pv * dt_h
+                    prev_ts = ts
+                except (ValueError, KeyError):
+                    prev_ts = None
     except Exception as e:
         log("ERROR", f"Energieberechnung Fehler: {e}")
     return round(total, 2)

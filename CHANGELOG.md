@@ -9,6 +9,20 @@ die Versionierung folgt grob [Semantic Versioning](https://semver.org/lang/de/).
 
 ---
 
+## [3.2.1] — 2026-06-24
+
+### Fixed
+- **Energieproduktion heute** zeigte ~50 % zu niedrigen Wert, weil
+  `total_pv_wh_daily` in der CSV mit `/60` (Annahme: 1-Minuten-Intervall)
+  berechnet wurde, die Daten aber alle 2 Minuten eintreffen.
+  Die KPI-Kachel nutzt jetzt `calcEnergyWh()` mit echten Zeitstempeln —
+  dieselbe Methode wie alle anderen drei KPIs.
+- `calculate_daily_energy` in `ecoflow_tracker_github.py` nutzt jetzt echte
+  Δt-Zeitdifferenzen zwischen Messpunkten statt des festen Teilers `/60`,
+  sodass auch das kumulative Liniendiagramm in Sektion 02 korrekte Werte zeigt.
+
+---
+
 ## [3.2.0] — 2026-06-24
 
 ### Added
