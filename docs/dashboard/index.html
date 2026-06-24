@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>EcoFlow BKW — Dashboard v3.5.2</title>
+<title>EcoFlow BKW — Dashboard v3.6.0</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
@@ -387,13 +387,14 @@
 </div>
 
 <script>
-const DASHBOARD_VERSION = 'v3.5.2';
+const DASHBOARD_VERSION = 'v3.6.0';
 const CSV_PATH = '../ecoflow_energie_daten.csv';
-const REFRESH_INTERVAL = 120;
+const REFRESH_INTERVAL = 30;
 
 let charts = {};
 let allData = [];
 let activeFilter = { preset: 'today', from: null, to: null };
+let lastLoadTime = 0;
 
 function fmtLabel(t){
   const [datePart, timePart] = t.split('T');
@@ -905,6 +906,7 @@ async function loadData(){
     } else {
       applyFilter(activeFilter.from, activeFilter.to, 'custom');
     }
+    lastLoadTime = Date.now();
     document.getElementById('metaInfo').textContent = `Zuletzt geladen: ${new Date().toLocaleString('de-DE')}`;
 
     // Staleness-Warnung: letzte Messung > 6 Minuten alt → 3+ verpasste Abholungen
@@ -1021,6 +1023,16 @@ async function handleLogin(e) {
 }
 
 document.getElementById('loginForm').addEventListener('submit', handleLogin);
+
+// Sofortiges Nachladen wenn der Tab nach einer Pause wieder aktiv wird
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && sessionStorage.getItem(AUTH_KEY) === '1') {
+    if (Date.now() - lastLoadTime >= REFRESH_INTERVAL * 1000) {
+      loadData();
+      countdown = REFRESH_INTERVAL;
+    }
+  }
+});
 
 if (sessionStorage.getItem(AUTH_KEY) === '1') {
   document.getElementById('login-wall').style.display = 'none';
