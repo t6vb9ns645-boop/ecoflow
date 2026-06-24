@@ -155,7 +155,7 @@
   <header>
     <div>
       <p class="eyebrow">EcoFlow Balcony Power Plant — Dashboard</p>
-      <h1>PowerStream &amp; Delta 3 <span class="vbadge" id="versionBadge">v3.0</span></h1>
+      <h1>PowerStream &amp; Delta 3 <span class="vbadge" id="versionBadge">v3.1.1</span></h1>
     </div>
     <div class="meta" id="metaInfo">Lade Daten …</div>
   </header>
@@ -227,7 +227,18 @@
     </div>
 
     <div class="panel">
-      <h3>Tagészähler PV-Energie</h3>
+      <h3>Systemleistung — Überblick</h3>
+      <div class="panel-sub">PV-Gesamt · AC-Hausverbrauch · Batterie-Leistung (W) im Zeitverlauf</div>
+      <div class="chart-box"><canvas id="sysChart"></canvas></div>
+      <div class="legend-row">
+        <span class="legend-item"><span class="dot" style="background:#F2A93B"></span>PV Gesamt (W)</span>
+        <span class="legend-item"><span class="dot" style="background:#E8EAED"></span>AC-Haus (W)</span>
+        <span class="legend-item"><span class="dot" style="background:#3FC1A6"></span>Batterie (W)</span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>Tageszähler PV-Energie</h3>
       <div class="panel-sub">Kumulativ seit Mitternacht (Wh)</div>
       <div class="chart-box"><canvas id="cumChart"></canvas></div>
     </div>
@@ -294,7 +305,7 @@
 </div>
 
 <script>
-const DASHBOARD_VERSION = 'v3.0';
+const DASHBOARD_VERSION = 'v3.1.1';
 const CSV_PATH = '../ecoflow_energie_daten.csv';
 const REFRESH_INTERVAL = 120;
 
@@ -472,6 +483,18 @@ function render(data, sourceLabel){
         { label:'Dauerleistung (W)', data: validData.map(r=>nn(r.permanent_watt)), borderColor:'#C084FC', backgroundColor:'transparent', fill:false, tension:0.1, pointRadius:0, borderWidth:1.2, borderDash:[6,3], spanGaps:true },
       ]},
     options:{ ...CHART_DEFAULTS, scales:{ x:X_SCALE, y:{ ...Y_SCALE('Watt'), beginAtZero:true } }}
+  });
+
+  charts.sys = new Chart(document.getElementById('sysChart'), {
+    type:'line',
+    data:{ labels: validData.map(r=>fmtLabel(r.t)),
+      datasets:[
+        { label:'PV Gesamt (W)', data: validData.map(r=>r.pv1_watt+r.pv2_watt), borderColor:'#F2A93B', backgroundColor:'rgba(242,169,59,0.10)', fill:true, tension:0.2, pointRadius:0, borderWidth:2 },
+        { label:'AC-Haus (W)', data: validData.map(r=>r.ac_house_watt), borderColor:'#E8EAED', backgroundColor:'transparent', fill:false, tension:0.1, pointRadius:0, borderWidth:1.6 },
+        { label:'Batterie (W)', data: validData.map(r=>r.battery_power_watt), borderColor:'#3FC1A6', backgroundColor:'transparent', fill:false, tension:0.15, pointRadius:0, borderWidth:1.4, borderDash:[3,2] },
+      ]},
+    options:{ ...CHART_DEFAULTS,
+      scales:{ x:X_SCALE, y:{ ...Y_SCALE('Watt'), beginAtZero:false } }}
   });
 
   charts.cum = new Chart(document.getElementById('cumChart'), {
