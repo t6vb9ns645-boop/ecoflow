@@ -93,4 +93,4 @@ Dieses Projekt ist für den persönlichen Gebrauch gedacht.
 
 **Status:** Production Ready  
 **Letzte Aktualisierung:** Juni 2026  
-**Version:** 3.2.1 — siehe [CHANGELOG.md](CHANGELOG.md)
+**Version:** 3.2.2 — siehe [CHANGELOG.md](CHANGELOG.md)

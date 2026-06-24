@@ -9,6 +9,28 @@ die Versionierung folgt grob [Semantic Versioning](https://semver.org/lang/de/).
 
 ---
 
+## [3.2.2] — 2026-06-24
+
+### Fixed
+- **Batterie-Vorzeichen korrigiert** (betrifft KPIs + Diagramme):
+  `battery_power_watt < 0` bedeutet **Laden** (nicht Entladen).
+  Während Hochsolar (11–16 Uhr) zeigt die Batterie −400 W →
+  Batterie lädt aus PV-Überschuss (physikalisch korrekt).
+  - `energyBattWh` („Energie aus Batterie heute") zählt jetzt korrekt
+    nur positive Werte (= Entladung).
+  - `energyFeedWh` („Netzeinspeisung") zieht jetzt negative Batterie-
+    werte als Ladeleistung ab (statt irrtümlich positive).
+- **Netzverbrauch (`grid_cons_watt`) auf ≥ 0 geclippt**: negative Werte
+  (physikalisch unmöglich für Verbrauch) werden auf 0 gesetzt.
+- **Zweite Y-Achse rechts** mit synchroner Skala zur linken Achse
+  in zwei Diagrammen eingeführt:
+  - „Leistungsfluss": Netzverbrauch auf rechter Achse (gleiche Skala).
+  - „Systemleistung": Batterie-Leistung auf rechter Achse (gleiche
+    Skala), damit Lade-/Entladeleistung direkt mit PV verglichen
+    werden kann ohne die linke Skala zu verzerren.
+
+---
+
 ## [3.2.1] — 2026-06-24
 
 ### Fixed

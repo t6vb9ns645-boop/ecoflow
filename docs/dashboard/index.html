@@ -218,7 +218,7 @@
 
     <div class="panel">
       <h3>Leistungsfluss — Netz, Steckdose &amp; PV→Wechselrichter</h3>
-      <div class="panel-sub">Netzverbrauch · Steckdosen-Ausgang · Dauerleistung · PV→WR (alle in W)</div>
+      <div class="panel-sub">Steckdosen-Ausgang · Dauerleistung · PV→WR (linke Achse) · Netzverbrauch ≥0 (rechte Achse, gleiche Skala)</div>
       <div class="chart-box"><canvas id="flowChart"></canvas></div>
       <div class="legend-row">
         <span class="legend-item"><span class="dot" style="background:#60A5FA"></span>Netzverbrauch</span>
@@ -230,7 +230,7 @@
 
     <div class="panel">
       <h3>Systemleistung — Überblick</h3>
-      <div class="panel-sub">PV-Gesamt · AC-Hausverbrauch · Batterie-Leistung (W) im Zeitverlauf</div>
+      <div class="panel-sub">PV-Gesamt · AC-Hausverbrauch (linke Achse) · Batterie-Leistung (rechte Achse, gleiche Skala · negativ = lädt)</div>
       <div class="chart-box"><canvas id="sysChart"></canvas></div>
       <div class="legend-row">
         <span class="legend-item"><span class="dot" style="background:#F2A93B"></span>PV Gesamt (W)</span>
@@ -307,7 +307,7 @@
 </div>
 
 <script>
-const DASHBOARD_VERSION = 'v3.2.1';
+const DASHBOARD_VERSION = 'v3.2.2';
 const CSV_PATH = '../ecoflow_energie_daten.csv';
 const REFRESH_INTERVAL = 120;
 
@@ -436,9 +436,9 @@ function render(data, sourceLabel){
     return plug + perm;
   });
 
-  // 3. Batterie-Entladung: battery_power_watt < 0 → entlädt
+  // 3. Batterie-Entladung: battery_power_watt > 0 → entlädt (< 0 = Laden)
   const energyBattWh = calcEnergyWh(todayRows, r =>
-    (!isNaN(r.battery_power_watt) && r.battery_power_watt < 0) ? Math.abs(r.battery_power_watt) : 0
+    (!isNaN(r.battery_power_watt) && r.battery_power_watt > 0) ? r.battery_power_watt : 0
   );
 
   // 4. Netzeinspeisung: PV − Verbrauch − Batterieladung (Überschuss ins Netz)
@@ -446,7 +446,7 @@ function render(data, sourceLabel){
     const pv   = (r.pv1_watt || 0) + (r.pv2_watt || 0);
     const plug = isNaN(r.inv_to_plug_watt) ? 0 : r.inv_to_plug_watt;
     const perm = isNaN(r.permanent_watt)   ? 0 : r.permanent_watt;
-    const battCharge = (!isNaN(r.battery_power_watt) && r.battery_power_watt > 0) ? r.battery_power_watt : 0;
+    const battCharge = (!isNaN(r.battery_power_watt) && r.battery_power_watt < 0) ? Math.abs(r.battery_power_watt) : 0;
     return Math.max(0, pv - plug - perm - battCharge);
   });
 
@@ -547,24 +547,32 @@ function render(data, sourceLabel){
     type:'line',
     data:{ labels: validData.map(r=>fmtLabel(r.t)),
       datasets:[
-        { label:'Netzverbrauch (W)', data: validData.map(r=>nn(r.grid_cons_watt)), borderColor:'#60A5FA', backgroundColor:'transparent', fill:false, tension:0.2, pointRadius:0, borderWidth:1.6, spanGaps:true },
-        { label:'Steckdose inv→plug (W)', data: validData.map(r=>nn(r.inv_to_plug_watt)), borderColor:'#34D399', backgroundColor:'transparent', fill:false, tension:0.2, pointRadius:0, borderWidth:1.4, borderDash:[3,2], spanGaps:true },
-        { label:'PV→WR (W)', data: validData.map(r=>nn(r.pv_to_inv_watt)), borderColor:'#FBBF24', backgroundColor:'transparent', fill:false, tension:0.2, pointRadius:0, borderWidth:1.4, spanGaps:true },
-        { label:'Dauerleistung (W)', data: validData.map(r=>nn(r.permanent_watt)), borderColor:'#C084FC', backgroundColor:'transparent', fill:false, tension:0.1, pointRadius:0, borderWidth:1.2, borderDash:[6,3], spanGaps:true },
+        { label:'Steckdose inv→plug (W)', data: validData.map(r=>nn(r.inv_to_plug_watt)), borderColor:'#34D399', backgroundColor:'transparent', fill:false, tension:0.2, pointRadius:0, borderWidth:1.4, borderDash:[3,2], spanGaps:true, yAxisID:'y' },
+        { label:'PV→WR (W)', data: validData.map(r=>nn(r.pv_to_inv_watt)), borderColor:'#FBBF24', backgroundColor:'transparent', fill:false, tension:0.2, pointRadius:0, borderWidth:1.4, spanGaps:true, yAxisID:'y' },
+        { label:'Dauerleistung (W)', data: validData.map(r=>nn(r.permanent_watt)), borderColor:'#C084FC', backgroundColor:'transparent', fill:false, tension:0.1, pointRadius:0, borderWidth:1.2, borderDash:[6,3], spanGaps:true, yAxisID:'y' },
+        { label:'Netzverbrauch (W)', data: validData.map(r=>{ const v=nn(r.grid_cons_watt); return v===null?null:Math.max(0,v); }), borderColor:'#60A5FA', backgroundColor:'transparent', fill:false, tension:0.2, pointRadius:0, borderWidth:1.6, spanGaps:true, yAxisID:'y2' },
       ]},
-    options:{ ...CHART_DEFAULTS, scales:{ x:X_SCALE, y:{ ...Y_SCALE('Watt'), beginAtZero:true } }}
+    options:{ ...CHART_DEFAULTS, scales:{ x:X_SCALE,
+      y:{ ...Y_SCALE('Watt'), beginAtZero:true },
+      y2:{ ...Y_SCALE('Netzverbrauch (W)','#60A5FA'), position:'right', grid:{display:false}, beginAtZero:true,
+        afterDataLimits(scale){ const l=scale.chart.scales.y; if(l){ scale.min=l.min; scale.max=l.max; } } }
+    }}
   });
 
   charts.sys = new Chart(document.getElementById('sysChart'), {
     type:'line',
     data:{ labels: validData.map(r=>fmtLabel(r.t)),
       datasets:[
-        { label:'PV Gesamt (W)', data: validData.map(r=>r.pv1_watt+r.pv2_watt), borderColor:'#F2A93B', backgroundColor:'rgba(242,169,59,0.10)', fill:true, tension:0.2, pointRadius:0, borderWidth:2 },
-        { label:'AC-Haus (W)', data: validData.map(r=>r.ac_house_watt), borderColor:'#E8EAED', backgroundColor:'transparent', fill:false, tension:0.1, pointRadius:0, borderWidth:1.6 },
-        { label:'Batterie (W)', data: validData.map(r=>r.battery_power_watt), borderColor:'#3FC1A6', backgroundColor:'transparent', fill:false, tension:0.15, pointRadius:0, borderWidth:1.4, borderDash:[3,2] },
+        { label:'PV Gesamt (W)', data: validData.map(r=>r.pv1_watt+r.pv2_watt), borderColor:'#F2A93B', backgroundColor:'rgba(242,169,59,0.10)', fill:true, tension:0.2, pointRadius:0, borderWidth:2, yAxisID:'y' },
+        { label:'AC-Haus (W)', data: validData.map(r=>r.ac_house_watt), borderColor:'#E8EAED', backgroundColor:'transparent', fill:false, tension:0.1, pointRadius:0, borderWidth:1.6, yAxisID:'y' },
+        { label:'Batterie (W)', data: validData.map(r=>r.battery_power_watt), borderColor:'#3FC1A6', backgroundColor:'transparent', fill:false, tension:0.15, pointRadius:0, borderWidth:1.4, borderDash:[3,2], yAxisID:'y2' },
       ]},
     options:{ ...CHART_DEFAULTS,
-      scales:{ x:X_SCALE, y:{ ...Y_SCALE('Watt'), beginAtZero:false } }}
+      scales:{ x:X_SCALE,
+        y:{ ...Y_SCALE('Watt'), beginAtZero:false },
+        y2:{ ...Y_SCALE('Batterie (W)','#3FC1A6'), position:'right', grid:{display:false},
+          afterDataLimits(scale){ const l=scale.chart.scales.y; if(l){ scale.min=l.min; scale.max=l.max; } } }
+      }}
   });
 
   charts.cum = new Chart(document.getElementById('cumChart'), {
