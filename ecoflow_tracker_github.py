@@ -13,6 +13,7 @@ import hashlib
 import hmac
 import random
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 # =============================================================================
 # KONFIGURATION
@@ -24,6 +25,7 @@ POWERSTREAM_SN = os.environ.get("POWERSTREAM_SN", "")
 DELTA3_SN = os.environ.get("DELTA3_SN", "")  # optional
 
 ECOFLOW_API_BASE = "https://api-e.ecoflow.com"
+HAMBURG_TZ = ZoneInfo("Europe/Berlin")
 CSV_FILENAME = "docs/ecoflow_energie_daten.csv"
 
 # Bump this whenever CSV_FIELDNAMES changes — triggers automatic migration.
@@ -272,7 +274,7 @@ def calculate_daily_energy(csv_file):
     """Berechnet Tageserzeugung aus CSV (PV-Wh seit Mitternacht)."""
     if not os.path.exists(csv_file):
         return 0.0
-    today = datetime.now().strftime("%Y-%m-%d")
+    today = datetime.now(HAMBURG_TZ).strftime("%Y-%m-%d")
     total = 0.0
     try:
         with open(csv_file, "r") as f:
@@ -329,7 +331,7 @@ def main():
             ps["battery_soc_percent"] = d3["battery_soc_percent"]
             ps["battery_power_watt"]  = d3["battery_power_watt"]
 
-    timestamp = datetime.now().isoformat(timespec="seconds")
+    timestamp = datetime.now(HAMBURG_TZ).isoformat(timespec="seconds")
     daily_wh  = calculate_daily_energy(CSV_FILENAME)
 
     row = {
