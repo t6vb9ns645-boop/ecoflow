@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>EcoFlow BKW — Dashboard v3</title>
+<title>EcoFlow BKW — Dashboard v3.2</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
@@ -155,7 +155,7 @@
   <header>
     <div>
       <p class="eyebrow">EcoFlow Balcony Power Plant — Dashboard</p>
-      <h1>PowerStream &amp; Delta 3 <span class="vbadge" id="versionBadge">v3.1.2</span></h1>
+      <h1>PowerStream &amp; Delta 3 <span class="vbadge" id="versionBadge">v3.2.0</span></h1>
     </div>
     <div class="meta" id="metaInfo">Lade Daten …</div>
   </header>
@@ -190,6 +190,8 @@
   <div class="section">
     <div class="section-head"><span class="num">02</span><h2>Energie</h2>
       <span class="hint">Erzeugung · Speicher · Verbrauch</span></div>
+
+    <div class="hero" id="energyKpi" style="margin-bottom:22px;"></div>
 
     <div class="panel">
       <h3>PV-Erzeugung — PowerStream Kanal 1 &amp; 2</h3>
@@ -305,7 +307,7 @@
 </div>
 
 <script>
-const DASHBOARD_VERSION = 'v3.1.2';
+const DASHBOARD_VERSION = 'v3.2.0';
 const CSV_PATH = '../ecoflow_energie_daten.csv';
 const REFRESH_INTERVAL = 120;
 
@@ -403,6 +405,74 @@ function render(data, sourceLabel){
   const validData = data.slice(validFromIdx);
   const lastRow = data[data.length-1];
 
+  // ── Tagesenergie-KPIs ──────────────────────────────────────────────────────
+  const todayStr = lastRow.t.split('T')[0];
+  const todayRows = data.filter(r => r.t && r.t.startsWith(todayStr));
+
+  function calcEnergyWh(rows, wattFn) {
+    let wh = 0;
+    for (let i = 1; i < rows.length; i++) {
+      const dt = (new Date(rows[i].t) - new Date(rows[i-1].t)) / 3600000;
+      if (dt <= 0 || dt > 0.1) continue; // skip gaps > 6 min
+      const w = wattFn(rows[i-1]);
+      if (!isNaN(w) && w > 0) wh += w * dt;
+    }
+    return wh;
+  }
+
+  function fmtWh(wh) {
+    const v = Math.round(wh);
+    if (v >= 1000) return (v / 1000).toFixed(2) + '<span class="unit">kWh</span>';
+    return v + '<span class="unit">Wh</span>';
+  }
+
+  // 1. Produktion: bereits als Tagessumme in CSV gespeichert
+  const energyProdWh = todayRows.length > 0 ? todayRows[todayRows.length - 1].total_pv_wh_daily : 0;
+
+  // 2. Verbrauch: Smart Plugs + Grundlast (inv→plug + permanent)
+  const energyConsWh = calcEnergyWh(todayRows, r => {
+    const plug = isNaN(r.inv_to_plug_watt) ? 0 : r.inv_to_plug_watt;
+    const perm = isNaN(r.permanent_watt)   ? 0 : r.permanent_watt;
+    return plug + perm;
+  });
+
+  // 3. Batterie-Entladung: battery_power_watt < 0 → entlädt
+  const energyBattWh = calcEnergyWh(todayRows, r =>
+    (!isNaN(r.battery_power_watt) && r.battery_power_watt < 0) ? Math.abs(r.battery_power_watt) : 0
+  );
+
+  // 4. Netzeinspeisung: PV − Verbrauch − Batterieladung (Überschuss ins Netz)
+  const energyFeedWh = calcEnergyWh(todayRows, r => {
+    const pv   = (r.pv1_watt || 0) + (r.pv2_watt || 0);
+    const plug = isNaN(r.inv_to_plug_watt) ? 0 : r.inv_to_plug_watt;
+    const perm = isNaN(r.permanent_watt)   ? 0 : r.permanent_watt;
+    const battCharge = (!isNaN(r.battery_power_watt) && r.battery_power_watt > 0) ? r.battery_power_watt : 0;
+    return Math.max(0, pv - plug - perm - battCharge);
+  });
+
+  document.getElementById('energyKpi').innerHTML = `
+    <div class="cell solar">
+      <div class="lbl">Energieproduktion heute</div>
+      <div class="val">${fmtWh(energyProdWh)}</div>
+      <div class="sub">PV1 + PV2 seit Mitternacht</div>
+    </div>
+    <div class="cell">
+      <div class="lbl">Energieverbrauch heute</div>
+      <div class="val">${fmtWh(energyConsWh)}</div>
+      <div class="sub">Smart Plugs + Grundlast</div>
+    </div>
+    <div class="cell batt">
+      <div class="lbl">Energie aus Batterie heute</div>
+      <div class="val">${fmtWh(energyBattWh)}</div>
+      <div class="sub">Einspeisung durch Entladung</div>
+    </div>
+    <div class="cell discharge">
+      <div class="lbl">Netzeinspeisung heute</div>
+      <div class="val">${fmtWh(energyFeedWh)}</div>
+      <div class="sub">Überschuss ins Stromnetz</div>
+    </div>`;
+
+  // ── Live-Momentaufnahme ─────────────────────────────────────────────────────
   const pvNow = (lastRow.pv1_watt||0) + (lastRow.pv2_watt||0);
   const battW = lastRow.battery_power_watt;
   const charging = battW > 0;
