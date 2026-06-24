@@ -286,6 +286,8 @@ def calculate_daily_energy(csv_file):
                     continue
                 try:
                     ts = datetime.fromisoformat(ts_str)
+                    if ts.tzinfo is None:
+                        ts = ts.replace(tzinfo=HAMBURG_TZ)
                     if prev_ts is not None:
                         dt_h = (ts - prev_ts).total_seconds() / 3600
                         if 0 < dt_h <= 0.1:  # max 6-min-Lücke akzeptieren
