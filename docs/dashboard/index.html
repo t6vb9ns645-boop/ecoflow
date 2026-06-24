@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>EcoFlow BKW — Dashboard v3.2</title>
+<title>EcoFlow BKW — Dashboard v3.3</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
@@ -42,6 +42,26 @@
   .statusbar button{background:var(--solar);color:#1a1208;border:none;font-weight:600;
     font-family:'IBM Plex Mono',monospace;font-size:12px;padding:8px 14px;border-radius:6px;cursor:pointer;}
   .statusbar button:hover{filter:brightness(1.08);}
+
+  /* ── Filter bar ── */
+  .filter-bar{background:var(--panel);border:1px solid var(--hair);border-radius:10px;
+    padding:12px 18px;margin-bottom:22px;display:flex;flex-wrap:wrap;align-items:center;gap:10px;}
+  .filter-btns{display:flex;gap:5px;flex-wrap:wrap;}
+  .filter-btn{font-family:'IBM Plex Mono',monospace;font-size:11px;padding:5px 10px;border-radius:6px;
+    border:1px solid var(--hair);background:var(--panel-2);color:var(--muted);cursor:pointer;transition:all .15s;}
+  .filter-btn:hover,.filter-btn.active{background:rgba(242,169,59,.14);color:var(--solar);border-color:rgba(242,169,59,.35);}
+  .filter-sep{width:1px;align-self:stretch;background:var(--hair);margin:0 4px;flex-shrink:0;}
+  .filter-range{display:flex;align-items:center;gap:7px;flex-wrap:wrap;}
+  .filter-inp{font-family:'IBM Plex Mono',monospace;font-size:11px;padding:5px 8px;
+    background:var(--panel-2);border:1px solid var(--hair);border-radius:6px;
+    color:var(--text);width:130px;outline:none;}
+  .filter-inp:focus{border-color:rgba(242,169,59,.4);}
+  .filter-inp::placeholder{color:var(--muted);}
+  .filter-lbl{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);}
+  .filter-apply{background:var(--solar);color:#1a1208;border:none;font-weight:600;
+    font-family:'IBM Plex Mono',monospace;font-size:11px;padding:5px 11px;border-radius:6px;cursor:pointer;}
+  .filter-apply:hover{filter:brightness(1.08);}
+  .filter-status{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);margin-left:auto;}
 
   /* ── Forecast ── */
   .forecast-card{background:var(--panel);border:1px solid var(--hair);border-radius:10px;
@@ -146,6 +166,10 @@
     .kpi-row,.kpi-row.cols-3{grid-template-columns:repeat(2,1fr);}
     .dq-grid{grid-template-columns:repeat(2,1fr);}
     h1{font-size:20px;}
+    .filter-bar{flex-direction:column;align-items:stretch;}
+    .filter-sep{display:none;}
+    .filter-status{margin-left:0;}
+    .filter-inp{flex:1;min-width:110px;}
   }
 </style>
 </head>
@@ -166,6 +190,28 @@
       <span id="refreshCountdown" style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);">Aktualisierung in 120s</span>
       <button onclick="loadData();countdown=REFRESH_INTERVAL;">↻ Neu laden</button>
     </div>
+  </div>
+
+  <!-- ── Filter bar ── -->
+  <div class="filter-bar">
+    <div class="filter-btns">
+      <button class="filter-btn active" data-preset="today"     onclick="setPreset('today')">Heute</button>
+      <button class="filter-btn"        data-preset="yesterday" onclick="setPreset('yesterday')">Gestern</button>
+      <button class="filter-btn"        data-preset="7d"        onclick="setPreset('7d')">7 Tage</button>
+      <button class="filter-btn"        data-preset="30d"       onclick="setPreset('30d')">30 Tage</button>
+      <button class="filter-btn"        data-preset="month"     onclick="setPreset('month')">Diesen Monat</button>
+      <button class="filter-btn"        data-preset="year"      onclick="setPreset('year')">Dieses Jahr</button>
+      <button class="filter-btn"        data-preset="all"       onclick="setPreset('all')">Alle</button>
+    </div>
+    <div class="filter-sep"></div>
+    <div class="filter-range">
+      <span class="filter-lbl">von</span>
+      <input class="filter-inp" id="filterFrom" type="text" placeholder="tt.mm.jjjj hh:mm" maxlength="16">
+      <span class="filter-lbl">bis</span>
+      <input class="filter-inp" id="filterTo"   type="text" placeholder="tt.mm.jjjj hh:mm" maxlength="16">
+      <button class="filter-apply" onclick="applyCustomRange()">Anwenden</button>
+    </div>
+    <span class="filter-status" id="filterStatus"></span>
   </div>
 
   <!-- ── Forecast ── -->
@@ -307,11 +353,13 @@
 </div>
 
 <script>
-const DASHBOARD_VERSION = 'v3.2.2';
+const DASHBOARD_VERSION = 'v3.3.0';
 const CSV_PATH = '../ecoflow_energie_daten.csv';
 const REFRESH_INTERVAL = 120;
 
 let charts = {};
+let allData = [];
+let activeFilter = { preset: 'today', from: null, to: null };
 
 function fmtLabel(t){
   const [datePart, timePart] = t.split('T');
@@ -385,7 +433,98 @@ const Y_SCALE = (label, color='#8A93A0') => ({ ticks:{ color, font:{ size:10 } }
 function nn(v){ return isNaN(v) ? null : v; }
 function vv(v){ return (v > 0) ? v : null; }
 
-function render(data, sourceLabel){
+function parseDEDate(s){
+  const m = s.trim().match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})\s+(\d{1,2}):(\d{2})$/);
+  if(!m) return null;
+  return new Date(+m[3], +m[2]-1, +m[1], +m[4], +m[5]);
+}
+
+function setPreset(p){
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.toggle('active', b.dataset.preset === p));
+  const now = new Date();
+  let from, to = now;
+  if(p === 'today'){
+    from = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  } else if(p === 'yesterday'){
+    const y = new Date(now.getFullYear(), now.getMonth(), now.getDate()-1);
+    from = y;
+    to   = new Date(y.getFullYear(), y.getMonth(), y.getDate(), 23, 59, 59);
+  } else if(p === '7d'){
+    from = new Date(now.getTime() - 7*24*3600000);
+  } else if(p === '30d'){
+    from = new Date(now.getTime() - 30*24*3600000);
+  } else if(p === 'month'){
+    from = new Date(now.getFullYear(), now.getMonth(), 1);
+  } else if(p === 'year'){
+    from = new Date(now.getFullYear(), 0, 1);
+  } else {
+    from = null; to = null;
+  }
+  applyFilter(from, to, p);
+}
+
+function applyCustomRange(){
+  const fv = document.getElementById('filterFrom').value;
+  const tv = document.getElementById('filterTo').value;
+  const from = fv ? parseDEDate(fv) : null;
+  const to   = tv ? parseDEDate(tv) : null;
+  if(fv && !from){ document.getElementById('filterStatus').textContent = '⚠ Ungültiges Von-Datum (tt.mm.jjjj hh:mm)'; return; }
+  if(tv && !to  ){ document.getElementById('filterStatus').textContent = '⚠ Ungültiges Bis-Datum (tt.mm.jjjj hh:mm)'; return; }
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  applyFilter(from, to, 'custom');
+}
+
+function aggregateRows(rows, gran){
+  const keyFn = gran === 'hour'
+    ? r => { const d=new Date(r.t); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}T${String(d.getHours()).padStart(2,'0')}:00:00`; }
+    : r => { const d=new Date(r.t); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}T12:00:00`; };
+  const map = new Map();
+  rows.forEach(r => { const k=keyFn(r); if(!map.has(k)) map.set(k,[]); map.get(k).push(r); });
+  const numF = ['pv1_watt','pv2_watt','ac_house_watt','battery_soc_percent','battery_power_watt',
+    'total_pv_wh_daily','pv1_temp_c','pv2_temp_c','inv_temp_c','grid_cons_watt',
+    'inv_to_plug_watt','permanent_watt','pv_to_inv_watt','pv1_volt','pv2_volt',
+    'inv_volt','bat_lower_limit','bat_upper_limit','wifi_rssi'];
+  return [...map.entries()].map(([k, grp]) => {
+    const out = { t: k };
+    numF.forEach(f => {
+      const vals = grp.map(r=>r[f]).filter(v=>!isNaN(v) && v!==null && v!==undefined);
+      out[f] = vals.length ? vals.reduce((a,b)=>a+b)/vals.length : NaN;
+    });
+    return out;
+  });
+}
+
+function applyFilter(from, to, preset){
+  if(!allData.length) return;
+  activeFilter = { preset, from, to };
+  let filtered = allData;
+  if(from || to){
+    filtered = allData.filter(r => {
+      const d = new Date(r.t);
+      return (!from || d >= from) && (!to || d <= to);
+    });
+  }
+  const rangeMs = filtered.length >= 2
+    ? new Date(filtered[filtered.length-1].t) - new Date(filtered[0].t) : 0;
+  const DAY = 24*3600000;
+  const gran = rangeMs > 90*DAY ? 'day' : rangeMs > 7*DAY ? 'hour' : 'raw';
+  const display = gran === 'raw' ? filtered : aggregateRows(filtered, gran);
+
+  const statusEl = document.getElementById('filterStatus');
+  if(statusEl){
+    if(!filtered.length){
+      statusEl.textContent = 'Keine Daten im gewählten Zeitraum';
+    } else {
+      let txt = `${filtered.length} Messwerte`;
+      if(filtered.length >= 2) txt += ` · ${fmtLabel(filtered[0].t)} – ${fmtLabel(filtered[filtered.length-1].t)}`;
+      if(gran !== 'raw') txt += ` (${gran === 'hour' ? 'Std.-Ø' : 'Tages-Ø'})`;
+      statusEl.textContent = txt;
+    }
+  }
+  render(display, CSV_PATH, filtered, preset);
+}
+
+function render(data, sourceLabel, rawRows, preset){
   destroyCharts();
   if(!data.length){
     document.getElementById('heroGrid').innerHTML = '<div class="cell"><div class="lbl">Keine Daten</div></div>';
@@ -405,9 +544,8 @@ function render(data, sourceLabel){
   const validData = data.slice(validFromIdx);
   const lastRow = data[data.length-1];
 
-  // ── Tagesenergie-KPIs ──────────────────────────────────────────────────────
-  const todayStr = lastRow.t.split('T')[0];
-  const todayRows = data.filter(r => r.t && r.t.startsWith(todayStr));
+  // ── Energie-KPIs (für ausgewählten Zeitraum) ──────────────────────────────
+  const energyRows = (rawRows && rawRows.length) ? rawRows : data;
 
   function calcEnergyWh(rows, wattFn) {
     let wh = 0;
@@ -426,23 +564,30 @@ function render(data, sourceLabel){
     return v + '<span class="unit">Wh</span>';
   }
 
-  // 1. Produktion: zeitgewichtet integriert (gleiche Methode wie alle anderen KPIs)
-  const energyProdWh = calcEnergyWh(todayRows, r => (r.pv1_watt || 0) + (r.pv2_watt || 0));
+  const PRESET_LBL = {
+    today:'heute', yesterday:'gestern', '7d':'(7 Tage)', '30d':'(30 Tage)',
+    month:'(Monat)', year:'(Jahr)', all:'(Gesamt)', custom:'(Zeitraum)'
+  };
+  const pLbl = PRESET_LBL[preset] || '(Zeitraum)';
+  const pSub = preset === 'today' ? 'seit Mitternacht'
+    : preset === 'yesterday' ? 'gesamter Vortag'
+    : energyRows.length >= 2
+      ? `${fmtLabel(energyRows[0].t)} – ${fmtLabel(energyRows[energyRows.length-1].t)}`
+      : '—';
 
-  // 2. Verbrauch: Smart Plugs + Grundlast (inv→plug + permanent)
-  const energyConsWh = calcEnergyWh(todayRows, r => {
+  const energyProdWh = calcEnergyWh(energyRows, r => (r.pv1_watt || 0) + (r.pv2_watt || 0));
+
+  const energyConsWh = calcEnergyWh(energyRows, r => {
     const plug = isNaN(r.inv_to_plug_watt) ? 0 : r.inv_to_plug_watt;
     const perm = isNaN(r.permanent_watt)   ? 0 : r.permanent_watt;
     return plug + perm;
   });
 
-  // 3. Batterie-Entladung: battery_power_watt > 0 → entlädt (< 0 = Laden)
-  const energyBattWh = calcEnergyWh(todayRows, r =>
+  const energyBattWh = calcEnergyWh(energyRows, r =>
     (!isNaN(r.battery_power_watt) && r.battery_power_watt > 0) ? r.battery_power_watt : 0
   );
 
-  // 4. Netzeinspeisung: PV − Verbrauch − Batterieladung (Überschuss ins Netz)
-  const energyFeedWh = calcEnergyWh(todayRows, r => {
+  const energyFeedWh = calcEnergyWh(energyRows, r => {
     const pv   = (r.pv1_watt || 0) + (r.pv2_watt || 0);
     const plug = isNaN(r.inv_to_plug_watt) ? 0 : r.inv_to_plug_watt;
     const perm = isNaN(r.permanent_watt)   ? 0 : r.permanent_watt;
@@ -452,22 +597,22 @@ function render(data, sourceLabel){
 
   document.getElementById('energyKpi').innerHTML = `
     <div class="cell solar">
-      <div class="lbl">Energieproduktion heute</div>
+      <div class="lbl">Energieproduktion ${pLbl}</div>
       <div class="val">${fmtWh(energyProdWh)}</div>
-      <div class="sub">PV1 + PV2 seit Mitternacht</div>
+      <div class="sub">${pSub}</div>
     </div>
     <div class="cell">
-      <div class="lbl">Energieverbrauch heute</div>
+      <div class="lbl">Energieverbrauch ${pLbl}</div>
       <div class="val">${fmtWh(energyConsWh)}</div>
       <div class="sub">Smart Plugs + Grundlast</div>
     </div>
     <div class="cell batt">
-      <div class="lbl">Energie aus Batterie heute</div>
+      <div class="lbl">Energie aus Batterie ${pLbl}</div>
       <div class="val">${fmtWh(energyBattWh)}</div>
       <div class="sub">Einspeisung durch Entladung</div>
     </div>
     <div class="cell discharge">
-      <div class="lbl">Netzeinspeisung heute</div>
+      <div class="lbl">Netzeinspeisung ${pLbl}</div>
       <div class="val">${fmtWh(energyFeedWh)}</div>
       <div class="sub">Überschuss ins Stromnetz</div>
     </div>`;
@@ -710,9 +855,14 @@ async function loadData(){
     }
     const rows = parseCsv(await res.text());
     if(!rows.length){ setStatus('err', 'Datei geladen, aber keine verwertbaren Zeilen.'); return; }
-    render(rows, CSV_PATH);
+    allData = rows;
+    if(activeFilter.preset !== 'custom'){
+      setPreset(activeFilter.preset);
+    } else {
+      applyFilter(activeFilter.from, activeFilter.to, 'custom');
+    }
     document.getElementById('metaInfo').textContent = `Zuletzt geladen: ${new Date().toLocaleString('de-DE')}`;
-    setStatus('ok', `${rows.length} Zeilen geladen.`);
+    setStatus('ok', `${rows.length} Zeilen gesamt geladen.`);
   } catch(err){
     setStatus('err', 'Netzwerkfehler: ' + err.message);
     document.getElementById('metaInfo').textContent = 'Fehler beim Laden';
