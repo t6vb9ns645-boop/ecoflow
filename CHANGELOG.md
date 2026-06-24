@@ -9,6 +9,23 @@ die Versionierung folgt grob [Semantic Versioning](https://semver.org/lang/de/).
 
 ---
 
+## [3.4.0] — 2026-06-24
+
+### Added
+- **Passwortschutz (Login-Overlay)**: Das Dashboard ist nun durch ein Passwort
+  geschützt. Beim Laden erscheint ein vollflächiger Login-Overlay im bestehenden
+  Dark-Theme. Das eingegebene Passwort wird clientseitig mit der Browser-API
+  `crypto.subtle` (SHA-256) gehasht und mit dem gespeicherten Hash verglichen —
+  kein Klartext im Code oder in der Übertragung.
+  Erfolgreiche Authentifizierung wird in `sessionStorage` gehalten (kein erneuter
+  Login innerhalb derselben Browser-Session; neues Fenster/Tab erfordert erneute
+  Eingabe).
+  Passwort ändern: `echo -n "neuespasswort" | sha256sum` → Hash in
+  `docs/dashboard/index.html` bei `PW_HASH` eintragen.
+- Dashboard-Version auf `v3.4.0` aktualisiert.
+
+---
+
 ## [3.3.1] — 2026-06-24
 
 ### Fixed
@@ -225,6 +242,7 @@ Erste produktive Version (GitHub Actions Edition).
 - Erstes Chart.js-Dashboard auf GitHub Pages mit Auto-Refresh.
 - Berechnung der Tageserzeugung (Wh seit Mitternacht).
 
+[3.4.0]: https://github.com/t6vb9ns645-boop/ecoflow/releases/tag/v3.4.0
 [3.3.1]: https://github.com/t6vb9ns645-boop/ecoflow/releases/tag/v3.3.1
 [3.3.0]: https://github.com/t6vb9ns645-boop/ecoflow/releases/tag/v3.3.0
 [3.2.0]: https://github.com/t6vb9ns645-boop/ecoflow/releases/tag/v3.2.0
