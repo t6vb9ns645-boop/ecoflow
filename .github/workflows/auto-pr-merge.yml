@@ -1,0 +1,58 @@
+name: Auto PR & Merge (Claude Branches)
+
+on:
+  push:
+    branches:
+      - 'claude/**'
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+
+  # Wird bei Push auf claude/** ausgelöst: erstellt PR falls noch keiner existiert
+  create-pr:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    steps:
+      - name: PR erstellen (falls noch nicht vorhanden)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="${{ github.ref_name }}"
+          existing=$(gh pr list \
+            --repo "${{ github.repository }}" \
+            --head "$BRANCH" \
+            --base main \
+            --json number \
+            --jq '.[0].number' 2>/dev/null || echo "")
+          if [ -z "$existing" ]; then
+            gh pr create \
+              --repo "${{ github.repository }}" \
+              --title "auto: ${BRANCH}" \
+              --body "Automatisch erstellter PR von Branch \`${BRANCH}\`." \
+              --base main \
+              --head "$BRANCH"
+            echo "PR erstellt fuer Branch ${BRANCH}"
+          else
+            echo "PR #${existing} existiert bereits"
+          fi
+
+  # Wird bei PR-Event ausgelöst: merged automatisch wenn Quell-Branch claude/** ist
+  auto-merge:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && startsWith(github.head_ref, 'claude/')
+    steps:
+      - name: PR mergen
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr merge "${{ github.event.number }}" \
+            --repo "${{ github.repository }}" \
+            --merge \
+            --delete-branch
+          echo "PR #${{ github.event.number }} gemergt"

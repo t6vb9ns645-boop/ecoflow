@@ -9,6 +9,19 @@ die Versionierung folgt grob [Semantic Versioning](https://semver.org/lang/de/).
 
 ---
 
+## [3.5.0] — 2026-06-24
+
+### Added
+- **Auto-PR-Merge-Workflow** (`.github/workflows/auto-pr-merge.yml`):
+  Pushes auf `claude/**`-Branches erstellen automatisch einen PR gegen `main`.
+  Wird ein PR von einem `claude/**`-Branch geöffnet oder aktualisiert,
+  mergt der Workflow ihn sofort ohne manuellen Review-Schritt.
+  Anschließend greift der bestehende `deploy-pages.yml` und veröffentlicht
+  das Dashboard automatisch auf GitHub Pages.
+- Dashboard-Version auf `v3.5.0` aktualisiert.
+
+---
+
 ## [3.4.0] — 2026-06-24
 
 ### Added
@@ -242,6 +255,7 @@ Erste produktive Version (GitHub Actions Edition).
 - Erstes Chart.js-Dashboard auf GitHub Pages mit Auto-Refresh.
 - Berechnung der Tageserzeugung (Wh seit Mitternacht).
 
+[3.5.0]: https://github.com/t6vb9ns645-boop/ecoflow/releases/tag/v3.5.0
 [3.4.0]: https://github.com/t6vb9ns645-boop/ecoflow/releases/tag/v3.4.0
 [3.3.1]: https://github.com/t6vb9ns645-boop/ecoflow/releases/tag/v3.3.1
 [3.3.0]: https://github.com/t6vb9ns645-boop/ecoflow/releases/tag/v3.3.0
