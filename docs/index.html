@@ -40,16 +40,21 @@
 
   <hr>
 
-  <h2>Erfasste Felder</h2>
+  <h2>Erfasste Felder <span style="color:var(--muted);font-weight:400;font-size:13px;">· Schema v2 (20 Spalten)</span></h2>
   <table>
     <tr><th>Feld</th><th>Quelle</th><th>Einheit</th></tr>
     <tr><td>timestamp</td><td>System</td><td>ISO 8601</td></tr>
-    <tr><td>pv1_watt</td><td>PowerStream</td><td>W</td></tr>
-    <tr><td>pv2_watt</td><td>PowerStream</td><td>W</td></tr>
+    <tr><td>pv1_watt · pv2_watt</td><td>PowerStream</td><td>W</td></tr>
     <tr><td>ac_house_watt</td><td>PowerStream</td><td>W</td></tr>
     <tr><td>battery_soc_percent</td><td>PowerStream</td><td>%</td></tr>
     <tr><td>battery_power_watt</td><td>PowerStream</td><td>W</td></tr>
     <tr><td>total_pv_wh_daily</td><td>berechnet</td><td>Wh</td></tr>
+    <tr><td>pv1_temp_c · pv2_temp_c · inv_temp_c</td><td>PowerStream</td><td>°C</td></tr>
+    <tr><td>pv1_volt · pv2_volt · inv_volt</td><td>PowerStream</td><td>V</td></tr>
+    <tr><td>grid_cons_watt · inv_to_plug_watt</td><td>PowerStream</td><td>W</td></tr>
+    <tr><td>permanent_watt · pv_to_inv_watt</td><td>PowerStream</td><td>W</td></tr>
+    <tr><td>bat_lower_limit · bat_upper_limit</td><td>PowerStream</td><td>%</td></tr>
+    <tr><td>wifi_rssi</td><td>PowerStream</td><td>dBm</td></tr>
   </table>
 
   <hr>
@@ -62,7 +67,7 @@
     <div class="card"><div class="label">Interval</div><div class="value batt">alle 2 Minuten</div></div>
   </div>
 
-  <footer>Quelle: GitHub Actions · EcoFlow Open Platform API v2 (api-e.ecoflow.com)</footer>
+  <footer>Quelle: GitHub Actions · EcoFlow Open Platform API v2 (api-e.ecoflow.com) · Dashboard v3.0</footer>
 </div>
 </body>
 </html>
