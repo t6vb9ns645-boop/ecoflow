@@ -22,5 +22,5 @@ jobs:
 
       - name: Push v1.0.0 tag
         run: |
-          git tag -a v1.0.0 b26253c -m "v1.0 initial GitHub Actions edition"
+          git tag -a v1.0.0 7135fc9 -m "v1.0 initial GitHub Actions edition"
           git push origin v1.0.0
