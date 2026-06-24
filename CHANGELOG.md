@@ -9,6 +9,21 @@ die Versionierung folgt grob [Semantic Versioning](https://semver.org/lang/de/).
 
 ---
 
+## [3.1.1] — 2026-06-24
+
+### Fixed
+- **Timezone-Bug**: Timestamps wurden in UTC gespeichert statt in Hamburger
+  Ortszeit (CEST = UTC+2). Alle Einträge lagen 2 Stunden hinter der
+  tatsächlichen Lokalzeit.
+- **Tageszähler-Reset**: `total_pv_wh_daily` wurde bisher um 02:00 Uhr CEST
+  (= Mitternacht UTC) auf 0 zurückgesetzt, nicht um Mitternacht Hamburger Zeit.
+- Verwendung von `zoneinfo.ZoneInfo("Europe/Berlin")` (Python-3.9-stdlib,
+  kein extra Package) — berücksichtigt automatisch CET/CEST-Wechsel.
+- Neue Timestamps tragen expliziten Offset, z. B. `2026-06-24T13:54:20+02:00`;
+  das Dashboard-Label (`fmtLabel`) verarbeitet dieses Format korrekt.
+
+---
+
 ## [3.1.0] — 2026-06-24
 
 ### Added
@@ -101,6 +116,7 @@ Erste produktive Version (GitHub Actions Edition).
 - Erstes Chart.js-Dashboard auf GitHub Pages mit Auto-Refresh.
 - Berechnung der Tageserzeugung (Wh seit Mitternacht).
 
+[3.1.1]: https://github.com/t6vb9ns645-boop/ecoflow/releases/tag/v3.1.1
 [3.1.0]: https://github.com/t6vb9ns645-boop/ecoflow/releases/tag/v3.1.0
 [3.0.0]: https://github.com/t6vb9ns645-boop/ecoflow/releases/tag/v3.0.0
 [2.0.0]: https://github.com/t6vb9ns645-boop/ecoflow/releases/tag/v2.0.0
