@@ -136,6 +136,7 @@
     <div class="legend-row">
       <span class="legend-item"><span class="dot" style="background:#F2A93B"></span>PV1 (W)</span>
       <span class="legend-item"><span class="dot" style="background:#F2D98B"></span>PV2 (W)</span>
+      <span class="legend-item"><span class="dot" style="background:#FFFFFF;border:1px dashed #888"></span>Gesamt (W)</span>
     </div>
   </div>
 
@@ -318,13 +319,16 @@ function render(data, sourceLabel){
     type:'line',
     data:{ labels: pvData.map(r=>fmtLabel(r.t)),
       datasets:[
-        { label:'PV1 (W)', data: pvData.map(r=>r.pv1_watt), borderColor:'#F2A93B', backgroundColor:'rgba(242,169,59,0.12)', fill:true, tension:0.2, pointRadius:0, borderWidth:1.8 },
-        { label:'PV2 (W)', data: pvData.map(r=>r.pv2_watt), borderColor:'#F2D98B', backgroundColor:'transparent', fill:false, tension:0.2, pointRadius:0, borderWidth:1.4 }
+        { label:'PV1 (W)', data: pvData.map(r=>r.pv1_watt), borderColor:'#F2A93B', backgroundColor:'rgba(242,169,59,0.12)', fill:true, tension:0.2, pointRadius:0, borderWidth:1.8, yAxisID:'y' },
+        { label:'PV2 (W)', data: pvData.map(r=>r.pv2_watt), borderColor:'#F2D98B', backgroundColor:'transparent', fill:false, tension:0.2, pointRadius:0, borderWidth:1.4, yAxisID:'y' },
+        { label:'Gesamt (W)', data: pvData.map(r=>r.pv1_watt+r.pv2_watt), borderColor:'#FFFFFF', backgroundColor:'transparent', fill:false, tension:0.2, pointRadius:0, borderWidth:2, borderDash:[4,3], yAxisID:'y2' }
       ]},
-    options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{display:false} },
+    options:{ responsive:true, maintainAspectRatio:false, interaction:{mode:'index', intersect:false},
+      plugins:{ legend:{labels:{color:'#8A93A0', font:{family:"'IBM Plex Mono'", size:11}}} },
       scales:{
         x:{ ticks:{color:'#8A93A0', maxTicksLimit:8, font:{family:"'IBM Plex Mono'", size:10}}, grid:{color:'#1B2430'} },
-        y:{ ticks:{color:'#8A93A0', font:{size:10}}, grid:{color:'#1B2430'}, title:{display:true,text:'Watt',color:'#8A93A0',font:{size:11}} }
+        y:{ position:'left', ticks:{color:'#8A93A0', font:{size:10}}, grid:{color:'#1B2430'}, title:{display:true,text:'PV1 / PV2 (W)',color:'#8A93A0',font:{size:11}} },
+        y2:{ position:'right', ticks:{color:'#FFFFFF', font:{size:10}}, grid:{display:false}, title:{display:true,text:'Gesamt (W)',color:'#FFFFFF',font:{size:11}} }
       }}
   });
 
