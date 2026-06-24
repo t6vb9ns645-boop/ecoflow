@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  tag:
+  create-releases:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -13,56 +13,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Create v1.0.0 release
+      - name: Create releases
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create v1.0.0 \
-            --target b14c62b \
-            --title "v1.0.0 — Initial Release" \
-            --notes "## v1.0.0 — Juni 2026
-
-Erste produktive Version (GitHub Actions Edition).
-
-### Added
-- EcoFlow PowerStream & Delta 3 Datentracker (EcoFlow Open Platform API v2, HMAC-SHA256)
-- Automatische Datenerfassung via GitHub Actions, ausgelöst durch cron-job.org
-- CSV-Export mit 7 Basisfeldern (PV1/PV2, AC-Haus, Batterie SOC/Leistung, Tageszähler)
-- Erstes Chart.js-Dashboard auf GitHub Pages mit Auto-Refresh
-- Berechnung der Tageserzeugung (Wh seit Mitternacht)"
-
-      - name: Create v2.0.0 release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release create v2.0.0 \
-            --target c752978 \
-            --title "v2.0.0 — All API Metrics" \
-            --notes "## v2.0.0 — 2026-06-24
-
-Erweiterung um alle verfügbaren API-Kennzahlen und Stabilisierung der Pipeline.
-
-### Added
-- 13 zusätzliche Messfelder: PV1/PV2/WR-Temperaturen, Spannungen, Netzverbrauch, Steckdosen-Ausgang, Dauerleistung, PV→WR-Leistung, Batterie-Limits, WLAN-RSSI
-- Forecast-Panel: Zeitstrahl der nächsten Datenabholungen für 60 Minuten
-- Automatische CSV-Schema-Migration
-- Adaptive Y-Achsen für Spannungs- und Temperatur-Diagramme"
-
-      - name: Create v3.0.0 release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release create v3.0.0 \
-            --target 2af4ac3 \
-            --title "v3.0.0 — Professional Dashboard" \
-            --notes "## v3.0.0 — 2026-06-24
-
-Vollständige Neustrukturierung des Dashboards aus Profi-Perspektive.
-
-### Added
-- Live-Momentaufnahme als Hero-Sektion: PV-Erzeugung, AC-Hausverbrauch, Batterie SOC und -Leistung
-- Dedizierter Bereich \"Datenqualität\" (Sektion 06) mit allen Diagnose-Hinweisen
-- Domain-gruppierte KPI-Reihen: Spannungen, Temperaturen, System & Konnektivität
-- WLAN-Signalqualität als Klartext-Bewertung (sehr gut / gut / mittel / schwach)
-- Versions-Badge v3.0 im Header, nummerierte Sektionen 01–06
-- CHANGELOG.md und README mit Live-Dashboard-Link"
+          gh release create v1.0.0 --target b14c62b --title "v1.0.0" --notes "Initial GitHub Actions edition"
+          gh release create v2.0.0 --target c752978 --title "v2.0.0" --notes "All API metrics (20 fields), CSV migration, forecast panel"
+          gh release create v3.0.0 --target 2af4ac3 --title "v3.0.0" --notes "Professional dashboard v3 - 6 sections, Datenqualitaet area, CHANGELOG"
