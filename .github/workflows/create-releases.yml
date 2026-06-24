@@ -8,7 +8,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      workflows: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -23,5 +22,5 @@ jobs:
 
       - name: Push v1.0.0 tag
         run: |
-          git tag -a v1.0.0 b14c62b -m "v1.0 initial GitHub Actions edition, 7 fields" || true
+          git tag -a v1.0.0 b26253c -m "v1.0 initial GitHub Actions edition"
           git push origin v1.0.0
