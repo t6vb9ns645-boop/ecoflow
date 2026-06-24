@@ -12,6 +12,7 @@
     --solar:#F2A93B; --batt:#3FC1A6; --batt-dim:#1E4A41;
     --warn:#D9614F; --warn-dim:#3A2220;
     --ok:#3FC1A6; --okbg:#11241F;
+    --volt:#A78BFA; --temp:#F87171;
   }
   *{box-sizing:border-box;}
   html,body{margin:0;background:var(--bg);color:var(--text);
@@ -60,6 +61,15 @@
   .stat.accent-batt .val{color:var(--batt);}
   .stat.accent-warn .val{color:var(--warn);}
 
+  .kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--hair);
+    border:1px solid var(--hair);border-radius:10px;overflow:hidden;margin-bottom:24px;}
+  .kpi{background:var(--panel);padding:13px 15px;}
+  .kpi .lbl{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;}
+  .kpi .val{font-family:'IBM Plex Mono',monospace;font-size:17px;font-weight:600;color:var(--text);}
+  .kpi .val.volt{color:var(--volt);}
+  .kpi .val.temp{color:var(--temp);}
+  .kpi .val.wifi{color:var(--muted);}
+
   .callout{background:var(--warn-dim);border:1px solid #4a2b27;border-left:3px solid var(--warn);
     border-radius:8px;padding:16px 18px;margin-bottom:28px;}
   .callout.ok{background:var(--okbg);border-color:#234038;border-left-color:var(--ok);}
@@ -81,11 +91,14 @@
   .legend-item{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);font-family:'IBM Plex Mono',monospace;}
   .dot{width:9px;height:9px;border-radius:50%;display:inline-block;}
 
+  .section-label{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--muted);margin:32px 0 12px;padding-bottom:8px;border-bottom:1px solid var(--hair);}
+
   footer{margin-top:36px;padding-top:16px;border-top:1px solid var(--hair);
     font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);
     display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;}
 
-  @media (max-width:640px){ .stats{grid-template-columns:repeat(2,1fr);} h1{font-size:20px;} }
+  @media (max-width:640px){ .stats{grid-template-columns:repeat(2,1fr);} .kpi-row{grid-template-columns:repeat(2,1fr);} h1{font-size:20px;} }
 </style>
 </head>
 <body>
@@ -115,11 +128,17 @@
 
   <div class="stats" id="statsGrid"></div>
 
+  <p class="section-label">Letzter Messwert — Spannungen, Temperaturen &amp; System</p>
+  <div class="kpi-row" id="kpiRow"></div>
+
   <div class="callout" id="callout"></div>
+
+  <!-- ── Energie ── -->
+  <p class="section-label">Energie</p>
 
   <div class="panel">
     <h2>Batterie-Ladezustand &amp; Lade-/Entladeleistung</h2>
-    <div class="panel-sub">SOC (%) links · Batterieleistung (W, + = Laden / − = Entladen) rechts — nur Zeitraum mit validen Daten</div>
+    <div class="panel-sub">SOC (%) links · Batterieleistung (W, + = Laden / − = Entladen) rechts</div>
     <div class="chart-box"><canvas id="battChart"></canvas></div>
   </div>
 
@@ -141,23 +160,58 @@
   </div>
 
   <div class="panel">
+    <h2>Leistungsfluss — Netz, Steckdose &amp; PV→Wechselrichter</h2>
+    <div class="panel-sub">Netzverbrauch · Steckdosen-Ausgang · Dauerleistung · PV→WR (alle in W)</div>
+    <div class="chart-box"><canvas id="flowChart"></canvas></div>
+    <div class="legend-row">
+      <span class="legend-item"><span class="dot" style="background:#60A5FA"></span>Netzverbrauch</span>
+      <span class="legend-item"><span class="dot" style="background:#34D399"></span>Steckdose (inv→plug)</span>
+      <span class="legend-item"><span class="dot" style="background:#FBBF24"></span>PV→WR</span>
+      <span class="legend-item"><span class="dot" style="background:#C084FC"></span>Dauerleistung</span>
+    </div>
+  </div>
+
+  <div class="panel">
     <h2>Tageszähler PV-Energie</h2>
     <div class="panel-sub">total_pv_wh_daily — kumulativ, setzt erst nach Mitternacht ein</div>
     <div class="chart-box"><canvas id="cumChart"></canvas></div>
   </div>
 
+  <!-- ── Spannungen ── -->
+  <p class="section-label">Spannungen</p>
+
+  <div class="panel">
+    <h2>Eingangsspannungen PV1 / PV2 &amp; Wechselrichter-Ausgangsspannung</h2>
+    <div class="panel-sub">PV1/PV2 (V) links · Wechselrichter (V) rechts</div>
+    <div class="chart-box"><canvas id="voltChart"></canvas></div>
+    <div class="legend-row">
+      <span class="legend-item"><span class="dot" style="background:#A78BFA"></span>PV1 (V)</span>
+      <span class="legend-item"><span class="dot" style="background:#C4B5FD"></span>PV2 (V)</span>
+      <span class="legend-item"><span class="dot" style="background:#7C3AED;border:1px dashed #888"></span>WR-Ausgang (V)</span>
+    </div>
+  </div>
+
+  <!-- ── Temperaturen ── -->
+  <p class="section-label">Temperaturen</p>
+
+  <div class="panel">
+    <h2>Temperaturen — PV1, PV2 &amp; Wechselrichter (LLC)</h2>
+    <div class="panel-sub">°C — nur Werte &gt; 0 °C dargestellt</div>
+    <div class="chart-box"><canvas id="tempChart"></canvas></div>
+    <div class="legend-row">
+      <span class="legend-item"><span class="dot" style="background:#F87171"></span>PV1 (°C)</span>
+      <span class="legend-item"><span class="dot" style="background:#FCA5A5"></span>PV2 (°C)</span>
+      <span class="legend-item"><span class="dot" style="background:#FB923C"></span>WR/LLC (°C)</span>
+    </div>
+  </div>
+
   <footer>
-    <span id="footerSource">Quelle: ecoflow_energie_daten.csv (relativer Pfad, selbes Repo)</span>
+    <span id="footerSource">Quelle: ecoflow_energie_daten.csv</span>
     <span id="footerCount">— Zeilen</span>
   </footer>
 </div>
 
 <script>
-/* ====================================================================
-   KONFIGURATION
-   Pfad zur CSV relativ zu dieser HTML-Datei. Anpassen, falls die CSV
-   in einem anderen Ordner liegt als dashboard.html.
-   ==================================================================== */
 const CSV_PATH = '../ecoflow_energie_daten.csv';
 
 let charts = {};
@@ -184,6 +238,12 @@ function setStatus(state, msg){
   el.innerHTML = `<span class="status-dot"></span><span>${msg}</span>`;
 }
 
+function g(cols, idx, key){
+  const i = idx[key];
+  if(i === undefined) return NaN;
+  return parseFloat(cols[i]);
+}
+
 function parseCsv(text){
   const lines = text.trim().split(/\r?\n/);
   const header = lines[0].split(',');
@@ -193,18 +253,44 @@ function parseCsv(text){
   for(let i=1;i<lines.length;i++){
     if(!lines[i].trim()) continue;
     const cols = lines[i].split(',');
-    rows.push({
+    const r = {
       t: cols[idx['timestamp']],
-      pv1_watt: parseFloat(cols[idx['pv1_watt']]),
-      pv2_watt: parseFloat(cols[idx['pv2_watt']]),
-      ac_house_watt: parseFloat(cols[idx['ac_house_watt']]),
-      battery_soc_percent: parseFloat(cols[idx['battery_soc_percent']]),
-      battery_power_watt: parseFloat(cols[idx['battery_power_watt']]),
-      total_pv_wh_daily: parseFloat(cols[idx['total_pv_wh_daily']])
-    });
+      pv1_watt:            parseFloat(cols[idx['pv1_watt']])            || 0,
+      pv2_watt:            parseFloat(cols[idx['pv2_watt']])            || 0,
+      ac_house_watt:       parseFloat(cols[idx['ac_house_watt']])       || 0,
+      battery_soc_percent: parseFloat(cols[idx['battery_soc_percent']]) || 0,
+      battery_power_watt:  parseFloat(cols[idx['battery_power_watt']])  || 0,
+      total_pv_wh_daily:   parseFloat(cols[idx['total_pv_wh_daily']])   || 0,
+      // new fields (may be absent in old rows — default to NaN so charts skip them)
+      pv1_temp_c:          g(cols,idx,'pv1_temp_c'),
+      pv2_temp_c:          g(cols,idx,'pv2_temp_c'),
+      inv_temp_c:          g(cols,idx,'inv_temp_c'),
+      grid_cons_watt:      g(cols,idx,'grid_cons_watt'),
+      inv_to_plug_watt:    g(cols,idx,'inv_to_plug_watt'),
+      permanent_watt:      g(cols,idx,'permanent_watt'),
+      pv_to_inv_watt:      g(cols,idx,'pv_to_inv_watt'),
+      pv1_volt:            g(cols,idx,'pv1_volt'),
+      pv2_volt:            g(cols,idx,'pv2_volt'),
+      inv_volt:            g(cols,idx,'inv_volt'),
+      bat_lower_limit:     g(cols,idx,'bat_lower_limit'),
+      bat_upper_limit:     g(cols,idx,'bat_upper_limit'),
+      wifi_rssi:           g(cols,idx,'wifi_rssi'),
+    };
+    rows.push(r);
   }
   return rows;
 }
+
+const CHART_DEFAULTS = {
+  responsive: true,
+  maintainAspectRatio: false,
+  interaction: { mode:'index', intersect:false },
+  plugins: { legend:{ labels:{ color:'#8A93A0', font:{ family:"'IBM Plex Mono'", size:11 } } } },
+};
+const X_SCALE = { ticks:{ color:'#8A93A0', maxTicksLimit:8, font:{ family:"'IBM Plex Mono'", size:10 } }, grid:{ color:'#1B2430' } };
+const Y_SCALE = (label, color='#8A93A0') => ({ ticks:{ color, font:{ size:10 } }, grid:{ color:'#1B2430' }, title:{ display:true, text:label, color, font:{ size:11 } } });
+
+function nz(v){ return (isNaN(v) || v===0) ? null : v; } // null = Chart.js skips the point
 
 function render(data, sourceLabel){
   destroyCharts();
@@ -267,13 +353,23 @@ function render(data, sourceLabel){
       <div class="sub">letzter Wert</div>
     </div>`;
 
+  const fmt = (v, unit, fallback='—') => isNaN(v) ? fallback : `${v} ${unit}`;
+  document.getElementById('kpiRow').innerHTML = `
+    <div class="kpi"><div class="lbl">PV1 Spannung</div><div class="val volt">${fmt(lastRow.pv1_volt,'V')}</div></div>
+    <div class="kpi"><div class="lbl">PV2 Spannung</div><div class="val volt">${fmt(lastRow.pv2_volt,'V')}</div></div>
+    <div class="kpi"><div class="lbl">WR Ausgangsspannung</div><div class="val volt">${fmt(lastRow.inv_volt,'V')}</div></div>
+    <div class="kpi"><div class="lbl">PV1 Temperatur</div><div class="val temp">${fmt(lastRow.pv1_temp_c,'°C')}</div></div>
+    <div class="kpi"><div class="lbl">PV2 Temperatur</div><div class="val temp">${fmt(lastRow.pv2_temp_c,'°C')}</div></div>
+    <div class="kpi"><div class="lbl">WR/LLC Temperatur</div><div class="val temp">${fmt(lastRow.inv_temp_c,'°C')}</div></div>
+    <div class="kpi"><div class="lbl">Batterie-Limit</div><div class="val">${isNaN(lastRow.bat_lower_limit)?'—':lastRow.bat_lower_limit+'% — '+lastRow.bat_upper_limit+'%'}</div></div>
+    <div class="kpi"><div class="lbl">WLAN RSSI</div><div class="val wifi">${fmt(lastRow.wifi_rssi,'dBm')}</div></div>`;
+
   const callout = document.getElementById('callout');
   if(zeroCount > 0){
     callout.className = 'callout';
     callout.innerHTML = `
-      <div class="ctitle">⚠ Nullwert-Phase erkannt — passt zum bekannten Zero-Values-Bug</div>
-      <p>Von <code>${data[0].t}</code> bis <code>${data[lastZeroIdx].t}</code> (≈ ${(((deadEnd-start)/3600000)).toFixed(1)} Stunden, ${zeroCount} Zeilen) stehen in allen Feldern ausschließlich <code>0.0</code>. Das entsteht typischerweise durch den <code>or 0</code>-Fallback, wenn <code>query_device()</code> ein leeres Dict liefert.</p>
-      <p>Erst ab <code>${data[validFromIdx].t}</code> tauchen plausible Werte auf.</p>`;
+      <div class="ctitle">⚠ Nullwert-Phase erkannt</div>
+      <p>Von <code>${data[0].t}</code> bis <code>${data[lastZeroIdx].t}</code> (${zeroCount} Zeilen) stehen ausschließlich <code>0.0</code>. Erst ab <code>${data[validFromIdx].t}</code> tauchen plausible Werte auf.</p>`;
   } else {
     callout.className = 'callout ok';
     callout.innerHTML = `
@@ -281,6 +377,7 @@ function render(data, sourceLabel){
       <p>Alle ${data.length} Zeilen enthalten mindestens einen Wert ungleich 0.0.</p>`;
   }
 
+  // ── Batterie ──
   charts.batt = new Chart(document.getElementById('battChart'), {
     type:'line',
     data:{ labels: validData.map(r=>fmtLabel(r.t)),
@@ -290,27 +387,25 @@ function render(data, sourceLabel){
         { label:'Batterieleistung (W)', data: validData.map(r=>r.battery_power_watt), borderColor:'#F2A93B',
           backgroundColor:'transparent', fill:false, tension:0.15, pointRadius:0, borderWidth:1.4, yAxisID:'y2', borderDash:[3,2] }
       ]},
-    options:{ responsive:true, maintainAspectRatio:false, interaction:{mode:'index', intersect:false},
-      plugins:{ legend:{labels:{color:'#8A93A0', font:{family:"'IBM Plex Mono'", size:11}}} },
+    options:{ ...CHART_DEFAULTS,
       scales:{
-        x:{ ticks:{color:'#8A93A0', maxTicksLimit:8, font:{family:"'IBM Plex Mono'", size:10}}, grid:{color:'#1B2430'} },
-        y:{ position:'left', ticks:{color:'#3FC1A6', font:{size:10}}, grid:{color:'#1B2430'}, title:{display:true,text:'SOC %',color:'#3FC1A6',font:{size:11}} },
-        y2:{ position:'right', ticks:{color:'#F2A93B', font:{size:10}}, grid:{display:false}, title:{display:true,text:'W',color:'#F2A93B',font:{size:11}} }
+        x: X_SCALE,
+        y: { ...Y_SCALE('SOC %','#3FC1A6'), position:'left' },
+        y2:{ ...Y_SCALE('W','#F2A93B'), position:'right', grid:{display:false} }
       }}
   });
 
+  // ── AC ──
   charts.ac = new Chart(document.getElementById('acChart'), {
     type:'line',
     data:{ labels: validData.map(r=>fmtLabel(r.t)),
       datasets:[{ label:'AC Hausverbrauch (W)', data: validData.map(r=>r.ac_house_watt), borderColor:'#E8EAED',
         backgroundColor:'rgba(232,234,237,0.06)', fill:true, tension:0.1, pointRadius:0, borderWidth:1.6 }]},
-    options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{display:false} },
-      scales:{
-        x:{ ticks:{color:'#8A93A0', maxTicksLimit:8, font:{family:"'IBM Plex Mono'", size:10}}, grid:{color:'#1B2430'} },
-        y:{ ticks:{color:'#8A93A0', font:{size:10}}, grid:{color:'#1B2430'}, title:{display:true,text:'Watt',color:'#8A93A0',font:{size:11}} }
-      }}
+    options:{ ...CHART_DEFAULTS, plugins:{ legend:{display:false} },
+      scales:{ x: X_SCALE, y: Y_SCALE('Watt') }}
   });
 
+  // ── PV ──
   const pvFromIdx = data.findIndex(r => r.pv1_watt>0 || r.pv2_watt>0);
   const pvData = pvFromIdx >= 0 ? data.slice(pvFromIdx) : [];
   document.getElementById('pvSub').textContent = pvData.length ? `Ab erstem PV-Signal: ${fmtLabel(pvData[0].t)} Uhr` : 'Kein PV-Signal > 0 im Datensatz';
@@ -323,25 +418,66 @@ function render(data, sourceLabel){
         { label:'PV2 (W)', data: pvData.map(r=>r.pv2_watt), borderColor:'#F2D98B', backgroundColor:'transparent', fill:false, tension:0.2, pointRadius:0, borderWidth:1.4, yAxisID:'y' },
         { label:'Gesamt (W)', data: pvData.map(r=>r.pv1_watt+r.pv2_watt), borderColor:'#FFFFFF', backgroundColor:'transparent', fill:false, tension:0.2, pointRadius:0, borderWidth:2, borderDash:[4,3], yAxisID:'y2' }
       ]},
-    options:{ responsive:true, maintainAspectRatio:false, interaction:{mode:'index', intersect:false},
-      plugins:{ legend:{labels:{color:'#8A93A0', font:{family:"'IBM Plex Mono'", size:11}}} },
+    options:{ ...CHART_DEFAULTS,
       scales:{
-        x:{ ticks:{color:'#8A93A0', maxTicksLimit:8, font:{family:"'IBM Plex Mono'", size:10}}, grid:{color:'#1B2430'} },
-        y:{ position:'left', ticks:{color:'#8A93A0', font:{size:10}}, grid:{color:'#1B2430'}, title:{display:true,text:'PV1 / PV2 (W)',color:'#8A93A0',font:{size:11}} },
-        y2:{ position:'right', ticks:{color:'#FFFFFF', font:{size:10}}, grid:{display:false}, title:{display:true,text:'Gesamt (W)',color:'#FFFFFF',font:{size:11}} }
+        x: X_SCALE,
+        y: { ...Y_SCALE('PV1 / PV2 (W)'), position:'left' },
+        y2:{ ...Y_SCALE('Gesamt (W)','#FFFFFF'), position:'right', grid:{display:false} }
       }}
   });
 
+  // ── Leistungsfluss ──
+  charts.flow = new Chart(document.getElementById('flowChart'), {
+    type:'line',
+    data:{ labels: validData.map(r=>fmtLabel(r.t)),
+      datasets:[
+        { label:'Netzverbrauch (W)', data: validData.map(r=>nz(r.grid_cons_watt)), borderColor:'#60A5FA', backgroundColor:'transparent', fill:false, tension:0.2, pointRadius:0, borderWidth:1.6 },
+        { label:'Steckdose inv→plug (W)', data: validData.map(r=>nz(r.inv_to_plug_watt)), borderColor:'#34D399', backgroundColor:'transparent', fill:false, tension:0.2, pointRadius:0, borderWidth:1.4, borderDash:[3,2] },
+        { label:'PV→WR (W)', data: validData.map(r=>nz(r.pv_to_inv_watt)), borderColor:'#FBBF24', backgroundColor:'transparent', fill:false, tension:0.2, pointRadius:0, borderWidth:1.4 },
+        { label:'Dauerleistung (W)', data: validData.map(r=>nz(r.permanent_watt)), borderColor:'#C084FC', backgroundColor:'transparent', fill:false, tension:0.1, pointRadius:0, borderWidth:1.2, borderDash:[6,3] },
+      ]},
+    options:{ ...CHART_DEFAULTS,
+      scales:{ x: X_SCALE, y: Y_SCALE('Watt') }}
+  });
+
+  // ── Tageszähler ──
   charts.cum = new Chart(document.getElementById('cumChart'), {
     type:'line',
     data:{ labels: pvData.map(r=>fmtLabel(r.t)),
       datasets:[{ label:'PV gesamt heute (Wh)', data: pvData.map(r=>r.total_pv_wh_daily), borderColor:'#3FC1A6',
         backgroundColor:'rgba(63,193,166,0.10)', fill:true, tension:0.15, pointRadius:0, borderWidth:1.8, stepped:'before' }]},
-    options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{display:false} },
+    options:{ ...CHART_DEFAULTS, plugins:{ legend:{display:false} },
+      scales:{ x: X_SCALE, y: Y_SCALE('Wh') }}
+  });
+
+  // ── Spannungen ──
+  charts.volt = new Chart(document.getElementById('voltChart'), {
+    type:'line',
+    data:{ labels: validData.map(r=>fmtLabel(r.t)),
+      datasets:[
+        { label:'PV1 (V)', data: validData.map(r=>nz(r.pv1_volt)), borderColor:'#A78BFA', backgroundColor:'transparent', fill:false, tension:0.2, pointRadius:0, borderWidth:1.8, yAxisID:'y' },
+        { label:'PV2 (V)', data: validData.map(r=>nz(r.pv2_volt)), borderColor:'#C4B5FD', backgroundColor:'transparent', fill:false, tension:0.2, pointRadius:0, borderWidth:1.4, yAxisID:'y' },
+        { label:'WR-Ausgang (V)', data: validData.map(r=>nz(r.inv_volt)), borderColor:'#7C3AED', backgroundColor:'transparent', fill:false, tension:0.1, pointRadius:0, borderWidth:1.4, borderDash:[4,3], yAxisID:'y2' }
+      ]},
+    options:{ ...CHART_DEFAULTS,
       scales:{
-        x:{ ticks:{color:'#8A93A0', maxTicksLimit:8, font:{family:"'IBM Plex Mono'", size:10}}, grid:{color:'#1B2430'} },
-        y:{ ticks:{color:'#8A93A0', font:{size:10}}, grid:{color:'#1B2430'}, title:{display:true,text:'Wh',color:'#8A93A0',font:{size:11}} }
+        x: X_SCALE,
+        y: { ...Y_SCALE('PV1 / PV2 (V)','#A78BFA'), position:'left' },
+        y2:{ ...Y_SCALE('WR-Ausgang (V)','#7C3AED'), position:'right', grid:{display:false} }
       }}
+  });
+
+  // ── Temperaturen ──
+  charts.temp = new Chart(document.getElementById('tempChart'), {
+    type:'line',
+    data:{ labels: validData.map(r=>fmtLabel(r.t)),
+      datasets:[
+        { label:'PV1 (°C)', data: validData.map(r=>nz(r.pv1_temp_c)), borderColor:'#F87171', backgroundColor:'rgba(248,113,113,0.08)', fill:true, tension:0.25, pointRadius:0, borderWidth:1.8 },
+        { label:'PV2 (°C)', data: validData.map(r=>nz(r.pv2_temp_c)), borderColor:'#FCA5A5', backgroundColor:'transparent', fill:false, tension:0.25, pointRadius:0, borderWidth:1.4, borderDash:[3,2] },
+        { label:'WR/LLC (°C)', data: validData.map(r=>nz(r.inv_temp_c)), borderColor:'#FB923C', backgroundColor:'transparent', fill:false, tension:0.2, pointRadius:0, borderWidth:1.6 },
+      ]},
+    options:{ ...CHART_DEFAULTS,
+      scales:{ x: X_SCALE, y: Y_SCALE('°C','#F87171') }}
   });
 
   document.getElementById('footerSource').textContent = 'Quelle: '+sourceLabel;
@@ -353,7 +489,7 @@ async function loadData(){
   try {
     const res = await fetch(CSV_PATH, { cache: 'no-store' });
     if(!res.ok){
-      setStatus('err', `Fehler ${res.status}: Datei nicht gefunden unter ${CSV_PATH}. Liegt die CSV im selben Ordner wie dashboard.html im veröffentlichten Branch?`);
+      setStatus('err', `Fehler ${res.status}: Datei nicht gefunden unter ${CSV_PATH}.`);
       document.getElementById('metaInfo').textContent = 'Fehler beim Laden';
       return;
     }
@@ -375,7 +511,7 @@ async function loadData(){
 
 loadData();
 
-const REFRESH_INTERVAL = 120; // Sekunden
+const REFRESH_INTERVAL = 120;
 let countdown = REFRESH_INTERVAL;
 
 setInterval(() => {

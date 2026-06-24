@@ -27,7 +27,11 @@ ECOFLOW_API_BASE = "https://api-e.ecoflow.com"
 CSV_FILENAME = "docs/ecoflow_energie_daten.csv"
 CSV_FIELDNAMES = [
     "timestamp", "pv1_watt", "pv2_watt", "ac_house_watt",
-    "battery_soc_percent", "battery_power_watt", "total_pv_wh_daily"
+    "battery_soc_percent", "battery_power_watt", "total_pv_wh_daily",
+    "pv1_temp_c", "pv2_temp_c", "inv_temp_c",
+    "grid_cons_watt", "inv_to_plug_watt", "permanent_watt", "pv_to_inv_watt",
+    "pv1_volt", "pv2_volt", "inv_volt",
+    "bat_lower_limit", "bat_upper_limit", "wifi_rssi",
 ]
 
 # =============================================================================
@@ -160,6 +164,23 @@ def extract_powerstream(data):
         "ac_house_watt": safe_float(ac, divisor=10),
         "battery_soc_percent": safe_float(bat_soc),
         "battery_power_watt": safe_float(bat_watts, divisor=10),
+        # Temperaturen (÷10 = °C)
+        "pv1_temp_c": safe_float(data.get("20_1.pv1Temp") or data.get("pv1Temp") or 0, divisor=10),
+        "pv2_temp_c": safe_float(data.get("20_1.pv2Temp") or data.get("pv2Temp") or 0, divisor=10),
+        "inv_temp_c": safe_float(data.get("20_1.llcTemp") or data.get("llcTemp") or 0, divisor=10),
+        # Netzleistungen (÷10 = W)
+        "grid_cons_watt": safe_float(data.get("20_1.gridConsWatts") or data.get("gridConsWatts") or 0, divisor=10),
+        "inv_to_plug_watt": safe_float(data.get("20_1.invToPlugWatts") or data.get("invToPlugWatts") or 0, divisor=10),
+        "permanent_watt": safe_float(data.get("20_1.permanentWatts") or data.get("permanentWatts") or 0, divisor=10),
+        "pv_to_inv_watt": safe_float(data.get("20_1.pvToInvWatts") or data.get("pvToInvWatts") or 0, divisor=10),
+        # Spannungen (÷10 = V)
+        "pv1_volt": safe_float(data.get("20_1.pv1InputVolt") or data.get("pv1InputVolt") or 0, divisor=10),
+        "pv2_volt": safe_float(data.get("20_1.pv2InputVolt") or data.get("pv2InputVolt") or 0, divisor=10),
+        "inv_volt": safe_float(data.get("20_1.invOpVolt") or data.get("invOpVolt") or 0, divisor=10),
+        # Batterie-Limits & WLAN
+        "bat_lower_limit": safe_float(data.get("20_1.lowerLimit") or data.get("lowerLimit") or 0),
+        "bat_upper_limit": safe_float(data.get("20_1.upperLimit") or data.get("upperLimit") or 0),
+        "wifi_rssi": safe_float(data.get("20_1.wifiRssi") or data.get("wifiRssi") or 0),
     }
 
 def extract_delta3(data):
@@ -258,6 +279,19 @@ def main():
         "battery_soc_percent": ps["battery_soc_percent"],
         "battery_power_watt": ps["battery_power_watt"],
         "total_pv_wh_daily": daily_wh,
+        "pv1_temp_c": ps["pv1_temp_c"],
+        "pv2_temp_c": ps["pv2_temp_c"],
+        "inv_temp_c": ps["inv_temp_c"],
+        "grid_cons_watt": ps["grid_cons_watt"],
+        "inv_to_plug_watt": ps["inv_to_plug_watt"],
+        "permanent_watt": ps["permanent_watt"],
+        "pv_to_inv_watt": ps["pv_to_inv_watt"],
+        "pv1_volt": ps["pv1_volt"],
+        "pv2_volt": ps["pv2_volt"],
+        "inv_volt": ps["inv_volt"],
+        "bat_lower_limit": ps["bat_lower_limit"],
+        "bat_upper_limit": ps["bat_upper_limit"],
+        "wifi_rssi": ps["wifi_rssi"],
     }
 
     append_to_csv(row, CSV_FILENAME)
