@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  create-releases:
+  create-tags:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -12,11 +12,17 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Create releases
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Configure git
         run: |
-          gh release create v1.0.0 --target b14c62b --title "v1.0.0" --notes "Initial GitHub Actions edition"
-          gh release create v2.0.0 --target c752978 --title "v2.0.0" --notes "All API metrics (20 fields), CSV migration, forecast panel"
-          gh release create v3.0.0 --target 2af4ac3 --title "v3.0.0" --notes "Professional dashboard v3 - 6 sections, Datenqualitaet area, CHANGELOG"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
+
+      - name: Create and push tags
+        run: |
+          git tag -a v1.0.0 b14c62b -m "v1.0 initial GitHub Actions edition, 7 fields"
+          git tag -a v2.0.0 c752978 -m "v2.0 all API metrics 20 fields, CSV migration, forecast panel"
+          git tag -a v3.0.0 2af4ac3 -m "v3.0 professional dashboard restructure, 6 sections, CHANGELOG"
+          git push origin v1.0.0 v2.0.0 v3.0.0
