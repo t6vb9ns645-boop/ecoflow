@@ -282,6 +282,7 @@ Erste produktive Version (GitHub Actions Edition).
 - Erstes Chart.js-Dashboard auf GitHub Pages mit Auto-Refresh.
 - Berechnung der Tageserzeugung (Wh seit Mitternacht).
 
+[3.6.1]: https://github.com/t6vb9ns645-boop/ecoflow/releases/tag/v3.6.1
 [3.5.0]: https://github.com/t6vb9ns645-boop/ecoflow/releases/tag/v3.5.0
 [3.4.0]: https://github.com/t6vb9ns645-boop/ecoflow/releases/tag/v3.4.0
 [3.3.1]: https://github.com/t6vb9ns645-boop/ecoflow/releases/tag/v3.3.1
