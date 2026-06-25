@@ -171,7 +171,7 @@ def extract_powerstream(data):
 
     pv1_t    = get_field(data, "20_1.pv1Temp",         "pv1Temp")
     pv2_t    = get_field(data, "20_1.pv2Temp",         "pv2Temp")
-    inv_t    = get_field(data, "20_1.llcTemp",          "llcTemp")
+    inv_t    = get_field(data, "20_1.invTemp", "invTemp", "20_1.llcTemp", "llcTemp")
     grid_w   = get_field(data, "20_1.gridConsWatts",   "gridConsWatts")
     plug_w   = get_field(data, "20_1.invToPlugWatts",  "invToPlugWatts")
     perm_w   = get_field(data, "20_1.permanentWatts",  "permanentWatts")

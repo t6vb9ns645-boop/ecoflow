@@ -9,6 +9,19 @@ die Versionierung folgt grob [Semantic Versioning](https://semver.org/lang/de/).
 
 ---
 
+## [3.6.1] — 2026-06-25
+
+### Fixed
+- **WR-Temperatur korrigiert**: Die Wechselrichter-Temperatur (WR) wurde fälschlich
+  aus dem API-Feld `llcTemp` gelesen, das exakt denselben Wert wie `pv1Temp` liefert.
+  Dadurch zeigten PV1 und WR im Dashboard stets dieselbe Temperatur, während PV2
+  abwich. Der WR liest jetzt primär das korrekte Feld `invTemp` (mit `llcTemp` als
+  Fallback). Bestehende Messwerte in der CSV bleiben unverändert; ab sofort erfasste
+  Werte zeigen die tatsächliche WR-Temperatur.
+- Dashboard-Version auf `v3.6.1` aktualisiert.
+
+---
+
 ## [3.5.2] — 2026-06-24
 
 ### Changed
