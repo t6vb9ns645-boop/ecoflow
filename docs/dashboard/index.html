@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>EcoFlow BKW — Dashboard v3.6.1</title>
+<title>EcoFlow BKW — Dashboard v3.7.0</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
@@ -125,6 +125,19 @@
   .legend-row{display:flex;gap:18px;margin-top:10px;flex-wrap:wrap;}
   .legend-item{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);font-family:'IBM Plex Mono',monospace;}
   .dot{width:9px;height:9px;border-radius:50%;display:inline-block;}
+
+  /* ── Smart Plugs ── */
+  .plug-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;}
+  .plug-card{background:var(--panel);border:1px solid var(--hair);border-radius:10px;
+    padding:13px 15px;position:relative;overflow:hidden;}
+  .plug-dot{position:absolute;top:0;left:0;right:0;height:3px;}
+  .plug-name{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;
+    margin-bottom:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .plug-watt{font-family:'IBM Plex Mono',monospace;font-size:20px;font-weight:600;margin-bottom:8px;}
+  .plug-badge{display:inline-block;font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:700;
+    letter-spacing:.06em;padding:2px 8px;border-radius:20px;}
+  .plug-badge.on{background:var(--okbg);color:var(--ok);}
+  .plug-badge.off{background:var(--panel-2);color:var(--muted);}
 
   /* ── Data quality zone (dedicated) ── */
   .dq{background:var(--panel-2);border:1px solid var(--hair);border-radius:12px;padding:6px 20px 20px;margin-top:8px;}
@@ -367,9 +380,22 @@
     <div class="kpi-row" id="sysKpi"></div>
   </div>
 
-  <!-- ── 6 · Datenqualität (dedizierter Bereich) ── -->
+  <!-- ── 6 · Smart Plugs ── -->
+  <div class="section" id="plugsSection" style="display:none;">
+    <div class="section-head"><span class="num">06</span><h2>Smart Plugs</h2>
+      <span class="hint" id="plugsHint">Letzter Messwert je Steckdose</span></div>
+    <div class="hero" id="plugsTotal" style="grid-template-columns:1fr;margin-bottom:16px;"></div>
+    <div class="plug-grid" id="plugsGrid"></div>
+    <div class="panel" style="margin-top:16px;">
+      <h3>Leistung je Smart Plug — Zeitverlauf</h3>
+      <div class="panel-sub">Watt pro Steckdose, eine Linie je Gerät</div>
+      <div class="chart-box tall"><canvas id="plugsChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- ── 7 · Datenqualität (dedizierter Bereich) ── -->
   <div class="section">
-    <div class="section-head"><span class="num">06</span><h2>Datenqualität</h2>
+    <div class="section-head"><span class="num">07</span><h2>Datenqualität</h2>
       <span class="hint">Diagnose &amp; Nullwert-Analyse</span></div>
     <div class="dq">
       <div class="dq-grid" id="dqGrid"></div>
@@ -387,12 +413,16 @@
 </div>
 
 <script>
-const DASHBOARD_VERSION = 'v3.6.1';
+const DASHBOARD_VERSION = 'v3.7.0';
 const CSV_PATH = '../ecoflow_energie_daten.csv';
+const SMARTPLUGS_CSV_PATH = '../ecoflow_smartplugs_daten.csv';
 const REFRESH_INTERVAL = 30;
+const PLUG_PALETTE = ['#F2A93B','#3FC1A6','#A78BFA','#60A5FA','#F87171','#34D399','#FBBF24','#C084FC','#F472B6','#38BDF8','#FB923C','#4ADE80'];
 
 let charts = {};
 let allData = [];
+let allSmartplugData = [];
+let smartplugsFileFound = false;
 let activeFilter = { preset: 'today', from: null, to: null };
 let lastLoadTime = 0;
 
@@ -416,15 +446,39 @@ function g(cols, idx, key){ const i = idx[key]; if(i === undefined) return NaN; 
 const fmtVal = (v, unit, fallback='—') => isNaN(v) ? fallback : `${v}<span class="unit">${unit}</span>`;
 const fmtKpi = (v, unit, fallback='—') => isNaN(v) ? fallback : `${v} ${unit}`;
 
+function parseCsvLine(line){
+  // Respektiert doppelte Anführungszeichen (RFC4180-artig) — nötig, da
+  // frei vergebene Smart-Plug-Namen Kommas enthalten können.
+  const out = [];
+  let cur = '', inQuotes = false;
+  for(let i=0;i<line.length;i++){
+    const c = line[i];
+    if(inQuotes){
+      if(c === '"'){
+        if(line[i+1] === '"'){ cur += '"'; i++; } else { inQuotes = false; }
+      } else { cur += c; }
+    } else {
+      if(c === '"'){ inQuotes = true; }
+      else if(c === ','){ out.push(cur); cur = ''; }
+      else { cur += c; }
+    }
+  }
+  out.push(cur);
+  return out;
+}
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
 function parseCsv(text){
   const lines = text.trim().split(/\r?\n/);
-  const header = lines[0].split(',');
+  const header = parseCsvLine(lines[0]);
   const idx = {};
   header.forEach((h,i)=> idx[h.trim()] = i);
   const rows = [];
   for(let i=1;i<lines.length;i++){
     if(!lines[i].trim()) continue;
-    const cols = lines[i].split(',');
+    const cols = parseCsvLine(lines[i]);
     rows.push({
       t: cols[idx['timestamp']],
       pv1_watt:            parseFloat(cols[idx['pv1_watt']])            || 0,
@@ -446,6 +500,33 @@ function parseCsv(text){
       bat_lower_limit:     g(cols,idx,'bat_lower_limit'),
       bat_upper_limit:     g(cols,idx,'bat_upper_limit'),
       wifi_rssi:           g(cols,idx,'wifi_rssi'),
+    });
+  }
+  return rows;
+}
+
+function parseSmartplugsCsv(text){
+  const lines = text.trim().split(/\r?\n/);
+  if(!lines.length || !lines[0]) return [];
+  const header = parseCsvLine(lines[0]);
+  const idx = {};
+  header.forEach((h,i)=> idx[h.trim()] = i);
+  const rows = [];
+  for(let i=1;i<lines.length;i++){
+    if(!lines[i].trim()) continue;
+    const cols = parseCsvLine(lines[i]);
+    const sn = cols[idx['plug_sn']];
+    if(!sn) continue;
+    rows.push({
+      t:              cols[idx['timestamp']],
+      plug_sn:        sn,
+      plug_name:      cols[idx['plug_name']] || sn,
+      watts:          g(cols,idx,'watts') || 0,
+      switch_sta:     g(cols,idx,'switch_sta') || 0,
+      volt:           g(cols,idx,'volt'),
+      current_a:      g(cols,idx,'current_a'),
+      temp_c:         g(cols,idx,'temp_c'),
+      led_brightness: g(cols,idx,'led_brightness'),
     });
   }
   return rows;
@@ -529,6 +610,32 @@ function aggregateRows(rows, gran){
   });
 }
 
+function aggregatePlugRows(rows, gran){
+  const keyFn = gran === 'hour'
+    ? r => { const d=new Date(r.t); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}T${String(d.getHours()).padStart(2,'0')}:00:00`; }
+    : r => { const d=new Date(r.t); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}T12:00:00`; };
+  const byPlug = new Map();
+  rows.forEach(r => {
+    if(!byPlug.has(r.plug_sn)) byPlug.set(r.plug_sn, new Map());
+    const tmap = byPlug.get(r.plug_sn);
+    const k = keyFn(r);
+    if(!tmap.has(k)) tmap.set(k, []);
+    tmap.get(k).push(r);
+  });
+  const out = [];
+  byPlug.forEach(tmap => {
+    tmap.forEach((grp, k) => {
+      const watts = grp.map(r=>r.watts).filter(v=>!isNaN(v));
+      out.push({
+        t: k, plug_sn: grp[0].plug_sn, plug_name: grp[grp.length-1].plug_name,
+        watts: watts.length ? watts.reduce((a,b)=>a+b)/watts.length : 0,
+        switch_sta: grp[grp.length-1].switch_sta,
+      });
+    });
+  });
+  return out;
+}
+
 function applyFilter(from, to, preset){
   if(!allData.length) return;
   activeFilter = { preset, from, to };
@@ -557,6 +664,11 @@ function applyFilter(from, to, preset){
     }
   }
   render(display, CSV_PATH, filtered, preset);
+
+  const filteredPlugs = (from || to)
+    ? allSmartplugData.filter(r => { const d = new Date(r.t); return (!from || d >= from) && (!to || d <= to); })
+    : allSmartplugData;
+  renderSmartplugs(gran === 'raw' ? filteredPlugs : aggregatePlugRows(filteredPlugs, gran));
 }
 
 function render(data, sourceLabel, rawRows, preset){
@@ -889,6 +1001,88 @@ function render(data, sourceLabel, rawRows, preset){
   document.getElementById('footerCount').textContent = data.length+' Zeilen';
 }
 
+function renderSmartplugs(rows){
+  const section = document.getElementById('plugsSection');
+  if(!smartplugsFileFound){
+    section.style.display = 'none';
+    if(charts.plugs){ charts.plugs.destroy(); delete charts.plugs; }
+    return;
+  }
+  section.style.display = '';
+
+  if(!rows.length){
+    document.getElementById('plugsTotal').innerHTML = '';
+    document.getElementById('plugsGrid').innerHTML = '<div class="plug-card"><div class="plug-name">Keine Daten im gewählten Zeitraum</div></div>';
+    document.getElementById('plugsHint').textContent = '—';
+    if(charts.plugs){ charts.plugs.destroy(); delete charts.plugs; }
+    return;
+  }
+
+  const groups = new Map();
+  rows.forEach(r => {
+    if(!groups.has(r.plug_sn)) groups.set(r.plug_sn, []);
+    groups.get(r.plug_sn).push(r);
+  });
+  const plugs = [...groups.entries()].map(([sn, grp]) => {
+    grp.sort((a,b) => new Date(a.t) - new Date(b.t));
+    return { sn, name: grp[grp.length-1].plug_name, rows: grp };
+  }).sort((a,b) => a.name.localeCompare(b.name, 'de'));
+
+  const lastT = rows.reduce((max, r) => r.t > max ? r.t : max, rows[0].t);
+  document.getElementById('plugsHint').textContent = 'Stand: ' + fmtLabel(lastT) + ' Uhr';
+
+  const totalWatts = plugs.reduce((sum, p) => sum + (p.rows[p.rows.length-1].watts || 0), 0);
+  const onCount = plugs.filter(p => p.rows[p.rows.length-1].switch_sta > 0).length;
+  document.getElementById('plugsTotal').innerHTML = `
+    <div class="cell solar">
+      <div class="lbl">Gesamtverbrauch Smart Plugs (aktuell)</div>
+      <div class="val">${totalWatts.toFixed(0)}<span class="unit">W</span></div>
+      <div class="sub">${plugs.length} Plug${plugs.length===1?'':'s'} · ${onCount} an, ${plugs.length-onCount} aus</div>
+    </div>`;
+
+  document.getElementById('plugsGrid').innerHTML = plugs.map((p, i) => {
+    const last = p.rows[p.rows.length-1];
+    const on = last.switch_sta > 0;
+    const color = PLUG_PALETTE[i % PLUG_PALETTE.length];
+    return `<div class="plug-card">
+      <div class="plug-dot" style="background:${color}"></div>
+      <div class="plug-name" title="${escapeHtml(p.name)}">${escapeHtml(p.name)}</div>
+      <div class="plug-watt">${last.watts.toFixed(0)}<span class="unit">W</span></div>
+      <div class="plug-badge ${on?'on':'off'}">${on?'AN':'AUS'}</div>
+    </div>`;
+  }).join('');
+
+  const timestamps = [...new Set(rows.map(r => r.t))].sort();
+  const datasets = plugs.map((p, i) => {
+    const byT = new Map(p.rows.map(r => [r.t, r.watts]));
+    return {
+      label: p.name, data: timestamps.map(t => byT.has(t) ? byT.get(t) : null),
+      borderColor: PLUG_PALETTE[i % PLUG_PALETTE.length], backgroundColor: 'transparent',
+      fill: false, tension: 0.2, pointRadius: 0, borderWidth: 1.6, spanGaps: true,
+    };
+  });
+
+  if(charts.plugs) charts.plugs.destroy();
+  charts.plugs = new Chart(document.getElementById('plugsChart'), {
+    type: 'line',
+    data: { labels: timestamps.map(fmtLabel), datasets },
+    options: { ...CHART_DEFAULTS, scales: { x: X_SCALE, y: { ...Y_SCALE('Watt'), beginAtZero: true } } }
+  });
+}
+
+async function fetchSmartplugsCsv(){
+  try {
+    const res = await fetch(SMARTPLUGS_CSV_PATH, { cache: 'no-store' });
+    if(!res.ok){ smartplugsFileFound = false; allSmartplugData = []; return; }
+    const rows = parseSmartplugsCsv(await res.text());
+    smartplugsFileFound = rows.length > 0;
+    allSmartplugData = rows;
+  } catch(err){
+    smartplugsFileFound = false;
+    allSmartplugData = [];
+  }
+}
+
 async function loadData(){
   setStatus('', 'Lade ' + CSV_PATH + ' …');
   try {
@@ -901,6 +1095,7 @@ async function loadData(){
     const rows = parseCsv(await res.text());
     if(!rows.length){ setStatus('err', 'Datei geladen, aber keine verwertbaren Zeilen.'); return; }
     allData = rows;
+    await fetchSmartplugsCsv();
     if(activeFilter.preset !== 'custom'){
       setPreset(activeFilter.preset);
     } else {

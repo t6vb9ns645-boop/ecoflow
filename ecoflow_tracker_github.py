@@ -6,6 +6,7 @@ Verwendet EcoFlow Open Platform API v2 (iot-open/sign/...)
 
 import requests
 import csv
+import json
 import os
 import sys
 import time
@@ -23,6 +24,7 @@ ECOFLOW_ACCESS_KEY = os.environ.get("ECOFLOW_ACCESS_KEY", "")
 ECOFLOW_SECRET_KEY = os.environ.get("ECOFLOW_SECRET_KEY", "")
 POWERSTREAM_SN = os.environ.get("POWERSTREAM_SN", "")
 DELTA3_SN = os.environ.get("DELTA3_SN", "")  # optional
+SMARTPLUGS_JSON = os.environ.get("SMARTPLUGS_JSON", "")  # optional, siehe parse_smartplugs_config()
 
 ECOFLOW_API_BASE = "https://api-e.ecoflow.com"
 HAMBURG_TZ = ZoneInfo("Europe/Berlin")
@@ -39,6 +41,17 @@ CSV_FIELDNAMES = [
     "grid_cons_watt", "inv_to_plug_watt", "permanent_watt", "pv_to_inv_watt",
     "pv1_volt", "pv2_volt", "inv_volt",
     "bat_lower_limit", "bat_upper_limit", "wifi_rssi",
+]
+
+# Smart Plugs: eigene CSV im Long-/Tidy-Format (eine Zeile pro Plug pro
+# Messzeitpunkt), damit beliebig viele Plugs ohne Schema-Änderung erfasst
+# werden können — Gegenteil vom Wide-Format der Haupt-CSV oben.
+CSV_SMARTPLUGS_FILENAME = "docs/ecoflow_smartplugs_daten.csv"
+SMARTPLUG_SCHEMA_VERSION = 1
+
+SMARTPLUG_FIELDNAMES = [
+    "timestamp", "plug_sn", "plug_name",
+    "watts", "switch_sta", "volt", "current_a", "temp_c", "led_brightness",
 ]
 
 # =============================================================================
@@ -61,7 +74,8 @@ def validate_config():
     if missing:
         log("ERROR", f"Fehlende GitHub Secrets: {', '.join(missing)}")
         return False
-    log("INFO", f"✓ Konfiguration OK (DELTA3_SN: {'gesetzt' if DELTA3_SN else 'nicht gesetzt, wird übersprungen'})")
+    log("INFO", f"✓ Konfiguration OK (DELTA3_SN: {'gesetzt' if DELTA3_SN else 'nicht gesetzt, wird übersprungen'} | "
+                 f"SMARTPLUGS_JSON: {'gesetzt' if SMARTPLUGS_JSON.strip() else 'nicht gesetzt, wird übersprungen'})")
     return True
 
 # =============================================================================
@@ -226,13 +240,41 @@ def extract_delta3(data):
         "battery_power_watt":  battery_power,
     }
 
+def extract_smartplug(data):
+    """
+    Extrahiert EcoFlow Smart Plug Werte.
+
+    Feldnamen und Skalierung sind bei Smart Plugs nicht offiziell dokumentiert;
+    Quelle ist die Community-Referenz der Home-Assistant-Integration
+    hassio-ecoflow-cloud (docs/devices/Smart_Plug-Public.md). Watt/Volt/Temp
+    sind wie bei PowerStream Integer×10 kodiert, Strom liegt in Milliampere.
+    switch_sta und led_brightness sind Rohwerte ohne Skalierung.
+    """
+    watts    = get_field(data, "2_1.watts",      "watts")
+    switch   = get_field(data, "2_1.switchSta",  "switchSta")
+    volt     = get_field(data, "2_1.volt",       "volt")
+    current  = get_field(data, "2_1.current",    "current")
+    temp     = get_field(data, "2_1.temp",       "temp")
+    bright   = get_field(data, "2_1.brightness", "brightness")
+
+    log("INFO", f"  watts={watts}, switch={switch}, volt={volt}, current={current}, temp={temp}")
+
+    return {
+        "watts":          safe_float(watts, divisor=10),
+        "switch_sta":     safe_float(switch),
+        "volt":           safe_float(volt,    divisor=10),
+        "current_a":      safe_float(current, divisor=1000),
+        "temp_c":         safe_float(temp,    divisor=10),
+        "led_brightness": safe_float(bright),
+    }
+
 # =============================================================================
 # CSV-MIGRATION
 # =============================================================================
 
-def migrate_csv_if_needed(csv_file):
+def migrate_csv_if_needed(csv_file, fieldnames, schema_version):
     """
-    Prüft ob der CSV-Header mit CSV_FIELDNAMES übereinstimmt.
+    Prüft ob der CSV-Header mit fieldnames übereinstimmt.
     Falls nicht (Schema-Änderung), wird die CSV neu geschrieben:
     - Neuer Header mit allen aktuellen Feldern
     - Alte Zeilen behalten ihre Werte; neue Spalten bleiben leer
@@ -244,27 +286,27 @@ def migrate_csv_if_needed(csv_file):
         with open(csv_file, "r", newline="") as f:
             reader = csv.DictReader(f)
             old_fields = list(reader.fieldnames or [])
-            if old_fields == CSV_FIELDNAMES:
-                log("INFO", f"✓ CSV-Schema v{CSV_SCHEMA_VERSION} aktuell ({len(CSV_FIELDNAMES)} Felder)")
+            if old_fields == fieldnames:
+                log("INFO", f"✓ CSV-Schema v{schema_version} aktuell ({len(fieldnames)} Felder) — {csv_file}")
                 return
             rows = list(reader)
 
-        added = [f for f in CSV_FIELDNAMES if f not in old_fields]
-        removed = [f for f in old_fields if f not in CSV_FIELDNAMES]
-        log("INFO", f"CSV-Schema veraltet: {len(old_fields)} → {len(CSV_FIELDNAMES)} Felder")
+        added = [f for f in fieldnames if f not in old_fields]
+        removed = [f for f in old_fields if f not in fieldnames]
+        log("INFO", f"CSV-Schema veraltet ({csv_file}): {len(old_fields)} → {len(fieldnames)} Felder")
         if added:   log("INFO", f"  + neu:     {added}")
         if removed: log("INFO", f"  - entfernt: {removed}")
         log("INFO", f"  Migriere {len(rows)} bestehende Zeilen …")
 
         with open(csv_file, "w", newline="") as f:
-            writer = csv.DictWriter(f, fieldnames=CSV_FIELDNAMES, extrasaction="ignore")
+            writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
             writer.writeheader()
             for row in rows:
                 writer.writerow(row)
 
-        log("INFO", f"✓ CSV-Migration abgeschlossen (v{CSV_SCHEMA_VERSION})")
+        log("INFO", f"✓ CSV-Migration abgeschlossen (v{schema_version}) — {csv_file}")
     except Exception as e:
-        log("ERROR", f"CSV-Migration fehlgeschlagen: {e}")
+        log("ERROR", f"CSV-Migration fehlgeschlagen ({csv_file}): {e}")
 
 # =============================================================================
 # TAGESERZEUGUNG
@@ -305,18 +347,80 @@ def calculate_daily_energy(csv_file):
 # CSV SCHREIBEN
 # =============================================================================
 
-def append_to_csv(data, csv_file):
+def append_to_csv(data, csv_file, fieldnames=CSV_FIELDNAMES):
     """Hängt eine neue Zeile an die CSV an. Header nur bei neuer Datei."""
     file_exists = os.path.isfile(csv_file)
     try:
         with open(csv_file, "a", newline="") as f:
-            writer = csv.DictWriter(f, fieldnames=CSV_FIELDNAMES)
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
             if not file_exists:
                 writer.writeheader()
             writer.writerow(data)
         log("INFO", f"💾 Zeile gespeichert: {data['timestamp']}")
     except Exception as e:
-        log("ERROR", f"CSV Fehler: {e}")
+        log("ERROR", f"CSV Fehler ({csv_file}): {e}")
+
+def append_rows_to_csv(rows, csv_file, fieldnames):
+    """Hängt mehrere Zeilen in einem Schreibvorgang an (z. B. ein Plug pro Zeile)."""
+    if not rows:
+        return
+    file_exists = os.path.isfile(csv_file)
+    try:
+        with open(csv_file, "a", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            if not file_exists:
+                writer.writeheader()
+            writer.writerows(rows)
+        log("INFO", f"💾 {len(rows)} Smart-Plug-Zeile(n) gespeichert")
+    except Exception as e:
+        log("ERROR", f"CSV Fehler ({csv_file}): {e}")
+
+# =============================================================================
+# SMART PLUGS
+# =============================================================================
+
+def parse_smartplugs_config():
+    """
+    Liest SMARTPLUGS_JSON: eine JSON-Liste von Objekten mit "sn" und "name",
+    z. B. [{"sn": "HW52...", "name": "Kühlschrank"}, ...].
+    Leer/nicht gesetzt → keine Smart Plugs konfiguriert (kein Fehler).
+    Ungültiges JSON oder fehlende "sn" → wird übersprungen und geloggt,
+    bricht den Lauf aber nicht ab.
+    """
+    if not SMARTPLUGS_JSON.strip():
+        return []
+    try:
+        raw = json.loads(SMARTPLUGS_JSON)
+    except json.JSONDecodeError as e:
+        log("ERROR", f"SMARTPLUGS_JSON ist kein gültiges JSON: {e}")
+        return []
+    if not isinstance(raw, list):
+        log("ERROR", "SMARTPLUGS_JSON muss eine JSON-Liste sein, z.B. [{\"sn\":\"...\",\"name\":\"...\"}]")
+        return []
+
+    plugs = []
+    for i, entry in enumerate(raw):
+        sn = str(entry.get("sn", "")).strip() if isinstance(entry, dict) else ""
+        if not sn:
+            log("ERROR", f"SMARTPLUGS_JSON Eintrag #{i} ohne 'sn' übersprungen: {entry}")
+            continue
+        name = str(entry.get("name") or sn).strip()
+        plugs.append({"sn": sn, "name": name})
+    return plugs
+
+def query_smartplugs(plugs, timestamp):
+    """Fragt jeden konfigurierten Smart Plug ab und baut eine CSV-Zeile (Long-Format) je Plug."""
+    rows = []
+    for plug in plugs:
+        data = query_device(plug["sn"], f"SmartPlug '{plug['name']}'")
+        values = extract_smartplug(data)
+        rows.append({
+            "timestamp": timestamp,
+            "plug_sn":   plug["sn"],
+            "plug_name": plug["name"],
+            **values,
+        })
+    return rows
 
 # =============================================================================
 # MAIN
@@ -331,7 +435,8 @@ def main():
         sys.exit(1)
 
     # Schema-Migration vor jedem Lauf — idempotent und schnell
-    migrate_csv_if_needed(CSV_FILENAME)
+    migrate_csv_if_needed(CSV_FILENAME, CSV_FIELDNAMES, CSV_SCHEMA_VERSION)
+    migrate_csv_if_needed(CSV_SMARTPLUGS_FILENAME, SMARTPLUG_FIELDNAMES, SMARTPLUG_SCHEMA_VERSION)
 
     ps_data = query_device(POWERSTREAM_SN, "PowerStream")
     ps = extract_powerstream(ps_data)
@@ -369,7 +474,17 @@ def main():
         "wifi_rssi":           ps["wifi_rssi"],
     }
 
-    append_to_csv(row, CSV_FILENAME)
+    append_to_csv(row, CSV_FILENAME, CSV_FIELDNAMES)
+
+    smartplugs = parse_smartplugs_config()
+    if smartplugs:
+        log("INFO", f"→ Frage {len(smartplugs)} Smart Plug(s) ab: {[p['name'] for p in smartplugs]}")
+        plug_rows = query_smartplugs(smartplugs, timestamp)
+        append_rows_to_csv(plug_rows, CSV_SMARTPLUGS_FILENAME, SMARTPLUG_FIELDNAMES)
+        for r in plug_rows:
+            log("INFO", f"  {r['plug_name']}: {r['watts']} W | {'an' if r['switch_sta'] else 'aus'}")
+    else:
+        log("INFO", "Keine Smart Plugs konfiguriert (SMARTPLUGS_JSON leer) — übersprungen")
 
     log("INFO", "")
     log("INFO", f"PV1: {ps['pv1_watt']} W | PV2: {ps['pv2_watt']} W | AC-Haus: {ps['ac_house_watt']} W")
