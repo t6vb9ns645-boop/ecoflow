@@ -39,6 +39,7 @@ jobs:
           ECOFLOW_SECRET_KEY: ${{ secrets.ECOFLOW_SECRET_KEY }}
           POWERSTREAM_SN: ${{ secrets.POWERSTREAM_SN }}
           DELTA3_SN: ${{ secrets.DELTA3_SN }}
+          SMARTPLUGS_JSON: ${{ secrets.SMARTPLUGS_JSON }}
         run: python ecoflow_tracker_github.py
 
       - name: Commit updated CSV to repository
@@ -47,6 +48,10 @@ jobs:
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add docs/ecoflow_energie_daten.csv
+          # Existiert nur, wenn SMARTPLUGS_JSON konfiguriert ist — Datei ist optional
+          if [ -f docs/ecoflow_smartplugs_daten.csv ]; then
+            git add docs/ecoflow_smartplugs_daten.csv
+          fi
           if git diff --staged --quiet; then
             echo "committed=false" >> $GITHUB_OUTPUT
           else
