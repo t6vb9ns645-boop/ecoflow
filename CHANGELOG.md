@@ -9,6 +9,47 @@ die Versionierung folgt grob [Semantic Versioning](https://semver.org/lang/de/).
 
 ---
 
+## [3.7.0] — 2026-07-26
+
+### Added
+- **Smart-Plug-Erfassung (9+ Steckdosen)**: Beliebig viele EcoFlow Smart Plugs
+  können jetzt zusätzlich zu PowerStream/Delta 3 erfasst werden, konfiguriert
+  über das neue optionale Secret `SMARTPLUGS_JSON` (JSON-Liste aus
+  Seriennummer + Name). Neue Plugs hinzufügen erfordert keinen Code- oder
+  Workflow-Change.
+- Neue Datei `docs/ecoflow_smartplugs_daten.csv` im **Long-/Tidy-Format**
+  (eine Zeile pro Plug pro Messzeitpunkt: `timestamp, plug_sn, plug_name,
+  watts, switch_sta, volt, current_a, temp_c, led_brightness`) — bewusst
+  getrennt von der Haupt-CSV, damit die Spaltenzahl nicht mit jeder
+  Plug-Änderung wächst (Wide-Format wäre bei 9+ Geräten unpraktikabel).
+  Eigene Schema-Versionierung (`SMARTPLUG_SCHEMA_VERSION`) mit derselben
+  automatischen Migration wie die Haupt-CSV.
+- Dashboard: neuer Bereich **„06 Smart Plugs"** — KPI-Kachel für den
+  Gesamtverbrauch, eine Kachel je Plug (Watt + An/Aus) und ein
+  Zeitverlauf-Chart mit einer Linie pro Gerät. Der bisherige Bereich
+  „Datenqualität" ist entsprechend zu „07" gerückt. Der Bereich bleibt
+  ausgeblendet, solange keine Smart Plugs konfiguriert sind.
+- `tests/test_ecoflow_tracker.py`: erste Unit-Tests des Projekts (stdlib
+  `unittest`, kein neues Dependency) für Smart-Plug-Extraktion,
+  `SMARTPLUGS_JSON`-Parsing und die generalisierte CSV-Migration.
+
+### Changed
+- `migrate_csv_if_needed()` generalisiert (Dateiname/Feldliste/Schema-Version
+  als Parameter statt fest verdrahteter Konstanten), damit sie für beide
+  CSV-Dateien wiederverwendbar ist.
+- Dashboard-CSV-Parser liest Felder jetzt Anführungszeichen-bewusst
+  (RFC4180-artig) statt naivem `split(',')` — nötig, da frei vergebene
+  Plug-Namen Kommas enthalten können.
+
+### Hinweis
+Die Feldnamen und die Skalierung der EcoFlow-Smart-Plug-API sind nicht
+offiziell dokumentiert; sie stammen aus der Community-Referenz
+[hassio-ecoflow-cloud](https://github.com/tolwi/hassio-ecoflow-cloud). Beim
+ersten produktiven Plug empfiehlt sich ein Blick ins `DEBUG`-Log des
+Workflow-Runs zur Verifikation der Rohwerte.
+
+---
+
 ## [3.6.1] — 2026-06-25
 
 ### Fixed

@@ -10,14 +10,15 @@ auto-aktualisierend, alle 2 Minuten neue Daten.
 
 🔗 Übersichtsseite: https://t6vb9ns645-boop.github.io/ecoflow/
 
-Das Dashboard ist in sechs Bereiche gegliedert:
+Das Dashboard ist in sieben Bereiche gegliedert:
 
 1. **Live-Momentaufnahme** — aktuelle Erzeugung, Verbrauch, Batteriezustand
 2. **Energie** — PV-Erzeugung, Batterie, AC-Verbrauch, Leistungsfluss, Tageszähler
 3. **Elektrische Spannungen** — PV1/PV2-Eingang & WR-Ausgang (adaptive Achsen)
 4. **Thermik** — Temperaturen PV1/PV2/Wechselrichter
 5. **System & Konnektivität** — WLAN-Signal, Batterie-Limits
-6. **Datenqualität** — Nullwert-Analyse, Datenabdeckung, Aufzeichnungsfenster
+6. **Smart Plugs** — Leistung & Schaltzustand je Steckdose (beliebig viele, siehe unten)
+7. **Datenqualität** — Nullwert-Analyse, Datenabdeckung, Aufzeichnungsfenster
 
 ## ✨ Features
 
@@ -36,6 +37,7 @@ Das Dashboard ist in sechs Bereiche gegliedert:
    - `ECOFLOW_SECRET_KEY`
    - `POWERSTREAM_SN`
    - `DELTA3_SN` *(optional)*
+   - `SMARTPLUGS_JSON` *(optional, siehe unten)*
 
 2. **Workflow testen** (Actions → Run workflow)
 
@@ -48,8 +50,45 @@ Das Dashboard ist in sechs Bereiche gegliedert:
 - `.github/workflows/ecoflow-collector.yml` — GitHub Actions Workflow
 - `docs/dashboard/index.html` — Live-Dashboard (Chart.js)
 - `docs/index.html` — Übersichts-/Landingpage
-- `docs/ecoflow_energie_daten.csv` — Messdaten
+- `docs/ecoflow_energie_daten.csv` — Messdaten PowerStream/Delta 3
+- `docs/ecoflow_smartplugs_daten.csv` — Messdaten Smart Plugs (nur vorhanden, wenn konfiguriert)
+- `tests/` — Unit-Tests (`python -m unittest discover -s tests`)
 - `requirements.txt` — Python Dependencies
+
+## 🔌 Smart Plugs (9+ Steckdosen)
+
+Beliebig viele EcoFlow Smart Plugs können zusätzlich erfasst werden — ohne
+Code-Änderung, allein über das Secret `SMARTPLUGS_JSON`. Jeder Plug muss im
+selben EcoFlow-Account registriert und im
+[Developer Portal](https://developer.ecoflow.com) freigeschaltet sein.
+
+**Secret-Format** (JSON-Liste, beliebig viele Einträge):
+
+```json
+[
+  { "sn": "HW52ZCH5SF4E0135", "name": "Kühlschrank" },
+  { "sn": "HW52ZCH5SF4E0136", "name": "Waschmaschine" },
+  { "sn": "HW52ZCH5SF4E0137", "name": "Router" }
+]
+```
+
+`name` ist optional (Fallback: Seriennummer). Ist `SMARTPLUGS_JSON` leer oder
+nicht gesetzt, wird die Smart-Plug-Abfrage vollständig übersprungen — die
+bestehende PowerStream/Delta-3-Erfassung ist davon unberührt.
+
+Die Daten landen im **Long-/Tidy-Format** in `docs/ecoflow_smartplugs_daten.csv`
+(eine Zeile pro Plug pro Messzeitpunkt: `timestamp, plug_sn, plug_name, watts,
+switch_sta, volt, current_a, temp_c, led_brightness`) — dadurch skaliert die
+Struktur ohne Schema-Änderung auf beliebig viele Plugs, im Gegensatz zum
+Wide-Format der Haupt-CSV. Das Dashboard zeigt sie in Bereich 6 als
+KPI-Kacheln pro Plug (Watt + An/Aus) plus Gesamtverbrauch und einen
+Zeitverlauf-Chart mit einer Linie je Gerät.
+
+⚠️ Die Feldnamen/Skalierung der Smart-Plug-API sind bei EcoFlow nicht
+offiziell dokumentiert (Quelle: Community-Referenz
+[hassio-ecoflow-cloud](https://github.com/tolwi/hassio-ecoflow-cloud)) — beim
+ersten echten Plug lohnt ein Blick ins `DEBUG`-Log des Workflow-Runs, um die
+Rohwerte zu verifizieren.
 - `CHANGELOG.md` — Versionshistorie
 
 ## 📈 Erfasste Daten (Schema v2 · 20 Spalten)
@@ -92,5 +131,5 @@ Dieses Projekt ist für den persönlichen Gebrauch gedacht.
 ---
 
 **Status:** Production Ready  
-**Letzte Aktualisierung:** Juni 2026  
-**Version:** 3.3.1 — siehe [CHANGELOG.md](CHANGELOG.md)
+**Letzte Aktualisierung:** Juli 2026  
+**Version:** 3.7.0 — siehe [CHANGELOG.md](CHANGELOG.md)
