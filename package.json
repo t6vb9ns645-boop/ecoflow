@@ -1,0 +1,14 @@
+{
+  "name": "ecoflow-dashboard",
+  "version": "4.0.0",
+  "private": true,
+  "type": "module",
+  "description": "EcoFlow BKW Dashboard - Berechnungsmodule und Tests",
+  "scripts": {
+    "test": "node --test \"tests/dashboard/**/*.test.mjs\"",
+    "test:coverage": "node --test --experimental-test-coverage --test-coverage-include=\"docs/dashboard/lib/**\" --test-coverage-lines=85 --test-coverage-branches=85 --test-coverage-functions=85 \"tests/dashboard/**/*.test.mjs\""
+  },
+  "engines": {
+    "node": ">=22.8.0"
+  }
+}
