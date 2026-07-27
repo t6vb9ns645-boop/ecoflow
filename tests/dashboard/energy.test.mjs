@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {
   isCharging, chargePower, dischargePower, batteryState,
   pvTotal, houseLoad, feedInPower, calcEnergyWh, cumulativeEnergyWh,
-  energyTotals, flowModel, houseBreakdown, MAX_GAP_HOURS,
+  energyTotals, flowModel, houseBreakdown, batteryFlows, MAX_GAP_HOURS,
 } from '../../docs/dashboard/lib/energy.mjs';
 
 /* ── Vorzeichenkonvention (CHANGELOG [3.2.2]) ───────────────────────────── */
@@ -193,6 +193,93 @@ test('flowModel bildet den Entladefall korrekt ab', () => {
 
 test('flowModel klemmt negativen Netzverbrauch auf 0', () => {
   assert.equal(flowModel({ ...LIVE_ROW, grid_cons_watt: -5 }).gridConsumption, 0);
+});
+
+/* ── Vorzeichen an echten Messpunkten (beide Richtungen) ────────────────── */
+
+test('Ladefall aus den Messdaten geht in der Bilanz exakt auf', () => {
+  // 2026-06-24T11:14:19: PV 221 W, Batterie -203 W, Haus 18 W -> 203 + 18 = 221
+  const row = { pv1_watt: 110, pv2_watt: 111, ac_house_watt: 18, battery_power_watt: -203, battery_soc_percent: 55 };
+  const f = flowModel(row);
+  assert.equal(f.charging, true);
+  assert.equal(f.batteryState, 'lädt');
+  assert.equal(chargePower(row.battery_power_watt) + f.house, f.pvTotal);
+});
+
+test('Entladefall aus den Messdaten deckt den Hausverbrauch', () => {
+  // 2026-06-23T21:18:22: PV 0 W, Batterie +23 W, Haus 19 W -> Entladung speist das Haus
+  const row = { pv1_watt: 0, pv2_watt: 0, ac_house_watt: 19, battery_power_watt: 23, battery_soc_percent: 60 };
+  const f = flowModel(row);
+  assert.equal(f.charging, false);
+  assert.equal(f.batteryState, 'entlädt');
+  assert.equal(f.pvTotal, 0);
+  assert.ok(dischargePower(row.battery_power_watt) >= f.house);
+});
+
+test('das Vorzeichen kehrt sich mit der Flussrichtung um, nicht mit dem Betrag', () => {
+  for (const w of [1, 40, 203, 290]) {
+    assert.equal(flowModel({ battery_power_watt: -w }).charging, true, `-${w} muss laden sein`);
+    assert.equal(flowModel({ battery_power_watt: w }).charging, false, `+${w} muss entladen sein`);
+    assert.equal(flowModel({ battery_power_watt: -w }).batteryMagnitude,
+      flowModel({ battery_power_watt: w }).batteryMagnitude, 'Betrag muss richtungsunabhaengig sein');
+  }
+});
+
+test('Speicher ohne Leistung gilt weder als ladend noch als entladend', () => {
+  const f = flowModel({ battery_power_watt: 0 });
+  assert.equal(f.charging, false);
+  assert.equal(f.batteryState, 'inaktiv');
+  assert.equal(f.batteryMagnitude, 0);
+});
+
+/* ── Lade-/Entladeanteil ueber einen Zeitraum ───────────────────────────── */
+
+const battRows = (values) => values.map((v) => ({ battery_power_watt: v }));
+
+test('batteryFlows trennt Laden und Entladen', () => {
+  const f = batteryFlows(battRows([-150, -150, 40, 40]));
+  assert.equal(f.meanCharge, 75);
+  assert.equal(f.meanDischarge, 20);
+  assert.equal(f.chargeSamples, 2);
+  assert.equal(f.dischargeSamples, 2);
+  assert.equal(f.bidirectional, true);
+});
+
+test('das Netto aus batteryFlows entspricht dem Mittelwert', () => {
+  const values = [-150, -150, -150, 40, 40, 40];
+  const f = batteryFlows(battRows(values));
+  const mean = values.reduce((a, b) => a + b, 0) / values.length;
+  assert.ok(Math.abs(f.net - mean) < 1e-9, `net ${f.net} != Mittelwert ${mean}`);
+});
+
+test('ein Netto nahe null verdeckt keine echten Fluesse mehr', () => {
+  // Gleich viel geladen wie entladen: der Pfeil zeigt fast nichts an,
+  // die getrennten Anteile machen den tatsaechlichen Umsatz sichtbar.
+  const f = batteryFlows(battRows([-100, 100, -100, 100]));
+  assert.equal(f.net, 0);
+  assert.equal(f.meanCharge, 50);
+  assert.equal(f.meanDischarge, 50);
+  assert.equal(f.bidirectional, true);
+});
+
+test('batteryFlows meldet eine reine Laderichtung als nicht bidirektional', () => {
+  const f = batteryFlows(battRows([-100, -200, 0]));
+  assert.equal(f.bidirectional, false);
+  assert.equal(f.meanDischarge, 0);
+  assert.ok(f.net < 0);
+});
+
+test('batteryFlows ignoriert fehlende Messwerte', () => {
+  const f = batteryFlows(battRows([NaN, -60, NaN, 20]));
+  assert.equal(f.chargeSamples, 1);
+  assert.equal(f.dischargeSamples, 1);
+  assert.equal(f.meanCharge, 30);
+});
+
+test('batteryFlows ist bei leerer Eingabe definiert', () => {
+  const f = batteryFlows([]);
+  assert.equal(f.net, 0);
+  assert.equal(f.bidirectional, false);
 });
 
 /* ── Aufschluesselung des Hausnetzes ────────────────────────────────────── */

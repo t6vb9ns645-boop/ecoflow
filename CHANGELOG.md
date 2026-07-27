@@ -36,9 +36,23 @@ Neustrukturierung der Oberfläche und erstmals testbare Dashboard-Logik.
 - **Vereinheitlichtes Kommandomenü**: Version, Datenaktualisierung und
   Zeitraum-Filter liegen in einem einklappbaren Menü. Zusammengeklappt zeigt es
   die aktiven Werte (Version, Datenalter, Zeitraum), aufgeklappt alle Optionen.
-- **Versionsarchiv**: Frühere Dashboard-Stände sind über das Menü aufrufbar.
-  `docs/dashboard/versions/vX.Y.Z/index.html` hält den jeweiligen Snapshot,
-  `versions/manifest.json` dient als Index.
+- **Versionsarchiv als echter Rückfallweg**: Frühere Dashboard-Stände sind über
+  das Menü aufrufbar und voll benutzbar — sie lesen dieselbe CSV und liefern
+  dieselben Energie-Kennzahlen. `docs/dashboard/versions/vX.Y.Z/index.html` hält
+  den Snapshot, `versions/manifest.json` dient als Index. Jede archivierte
+  Version trägt oben einen Hinweisbalken mit **Rückweg zur aktuellen Fassung**,
+  damit der Wechsel in beide Richtungen möglich ist.
+  - Nachgewiesen: derselbe 7-Tage-Zeitraum ergibt in v3.7.0 und v4.0.0
+    identische Werte (13,07 / 7,90 / 4,65 / 4,30 kWh).
+  - Ein Test hält den Gleichstand dauerhaft fest: Er rechnet die
+    Energieformeln aus v3.7.0 als Referenz nach und vergleicht sie mit den
+    v4-Modulen — auf synthetischen Tagesverläufen und auf dem gemischten
+    Altbestand.
+- **Getrennte Lade-/Entladeanzeige im Ø-Modus**: Ein Zeitraum-Mittelwert
+  verrechnet beide Richtungen zu einer Zahl — lädt der Speicher zeitweise mit
+  34 W und entlädt mit 29 W, bleiben netto nur −5 W übrig, was wie Stillstand
+  aussieht. Kamen beide Richtungen vor, weist das Speicher-Feld sie jetzt
+  zusätzlich getrennt aus (`↓ laden · ↑ entladen`).
 - **Automatische Tests für die Dashboard-Logik**: 138 Tests mit dem in Node 22
   eingebauten Test-Runner — keine neue Abhängigkeit, konsistent zu den
   bestehenden Python-Tests (stdlib `unittest`). Abdeckung der Berechnungsmodule:
@@ -82,6 +96,19 @@ Neustrukturierung der Oberfläche und erstmals testbare Dashboard-Logik.
   auf jedes Verzeichnis dieses Namens und hätte `docs/dashboard/lib/`
   stillschweigend von der Versionierung ausgenommen. Das Muster ist jetzt auf
   das Wurzelverzeichnis begrenzt.
+
+### Rückwärtskompatibilität
+- **Datenformat unverändert.** v4.0.0 liest denselben CSV-Bestand wie alle
+  Vorgänger: Zeilen aus dem alten 7-Spalten-Schema, migrierte Zeilen mit leeren
+  v2-Feldern und vollständige neue Zeilen — auch gemischt in einer Datei.
+  Fehlende Felder bleiben als „kein Messwert" erkennbar und werden nicht
+  fälschlich als 0 gewertet. Auch Spalten in abweichender Reihenfolge oder
+  zusätzliche, unbekannte Spalten stören die Auswertung nicht.
+- **Berechnungen unverändert.** Die Energieformeln liefern dieselben Zahlen wie
+  v3.7.0; ein Test vergleicht beide Implementierungen direkt. Auch die
+  Nullwert-Erkennung der Datenqualität arbeitet nach derselben Regel.
+- **Rückfall jederzeit möglich.** v3.7.0 bleibt über das Versionsmenü erreichbar
+  und voll benutzbar, mit Rückweg zur aktuellen Fassung.
 
 ### Hinweis zur Versionierung
 MAJOR-Sprung, weil die Oberfläche neu strukturiert ist (Tabs statt einer

@@ -149,6 +149,9 @@ button{font-family:inherit;}
 .vitem.current .vtag{color:var(--accent);}
 .vitem .vtitle{font-size:12.5px;color:var(--ink-2);}
 .vitem .vdate{font-family:var(--mono);font-size:11px;color:var(--ink-3);flex-shrink:0;}
+.vhint{font-size:11.5px;color:var(--ink-3);line-height:1.6;margin-top:12px;padding-left:10px;
+  border-left:2px solid var(--hair);}
+.batt-split{letter-spacing:-.012em;}
 
 .refresh-row{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;}
 .status-text{display:flex;align-items:center;gap:9px;font-family:var(--mono);font-size:12px;color:var(--ink-2);}
@@ -185,6 +188,9 @@ button{font-family:inherit;}
 .filter-note.error{color:var(--danger);}
 
 /* ── Tabs ────────────────────────────────────────────────────────────────── */
+/* Die Kommandoleiste klebt oben. Ohne diesen Abstand landen Elemente, die per
+   Scroll angesteuert werden (Tastaturfokus, Sprungmarken), unter ihr. */
+.tabstrip,.card,.chart-card{scroll-margin-top:96px;}
 .tabstrip{position:relative;display:flex;gap:4px;border-bottom:1px solid var(--hair);margin-bottom:2px;}
 .tab{
   position:relative;background:none;border:none;cursor:pointer;padding:14px 4px 15px;
@@ -481,6 +487,9 @@ footer{margin-top:34px;padding-top:18px;border-top:1px solid var(--hair);
         <div class="cgroup">
           <div class="micro cgroup-label">Version</div>
           <div class="vlist" id="versionList"></div>
+          <div class="vhint">Frühere Versionen lesen dieselben Messdaten und rechnen identisch —
+            bei einem Problem mit der aktuellen Fassung kannst du jederzeit auf eine ältere wechseln
+            und von dort zurück.</div>
         </div>
 
         <div class="cgroup">
@@ -564,6 +573,7 @@ footer{margin-top:34px;padding-top:18px;border-top:1px solid var(--hair);
                 <div class="micro nlabel">Speicher</div>
                 <div class="nval" id="socVal">—</div>
                 <div class="nfoot" id="battWattVal">—</div>
+                <div class="nfoot batt-split" id="battSplit" hidden></div>
                 <div class="pill idle" id="battPill">—</div>
               </div>
             </div>
@@ -786,6 +796,9 @@ $('presetChips').addEventListener('click', (e) => {
     .forEach((b) => b.classList.toggle('active', b.dataset.preset === state.preset));
   $('filterNote').className = 'filter-note';
   render();
+  // Nach der Auswahl zuklappen: das aufgeklappte Menue verdeckt sonst genau
+  // die Auswertung, die man gerade angefordert hat.
+  toggleCommand(false);
 });
 
 $('applyRange').addEventListener('click', () => {
@@ -803,6 +816,7 @@ $('applyRange').addEventListener('click', () => {
   state.to = to;
   document.querySelectorAll('#presetChips .chip').forEach((b) => b.classList.remove('active'));
   render();
+  toggleCommand(false);
 });
 
 $('reloadBtn').addEventListener('click', () => { loadData(); countdown = REFRESH_SECONDS; });
@@ -955,6 +969,21 @@ function renderFlow() {
   const pill = $('battPill');
   pill.className = `pill ${f.batteryState === 'lädt' ? 'charge' : f.batteryState === 'entlädt' ? 'discharge' : 'idle'}`;
   pill.textContent = f.batteryState;
+
+  // Im Ø-Modus verrechnet der Mittelwert Laden und Entladen zu einer Zahl.
+  // Kamen beide Richtungen vor, werden sie zusaetzlich getrennt ausgewiesen —
+  // sonst sähe ein Zeitraum mit viel Umsatz in beide Richtungen aus wie
+  // Stillstand.
+  const split = $('battSplit');
+  const showSplit = state.flowMode === 'period' && vm.battery.bidirectional;
+  split.hidden = !showSplit;
+  if (showSplit) {
+    split.innerHTML = `<span style="color:var(--batt)">↓ ${fmtW(vm.battery.meanCharge)}</span>`
+      + ` <span style="color:var(--ink3)">·</span> `
+      + `<span style="color:var(--accent)">↑ ${fmtW(vm.battery.meanDischarge)} W</span>`;
+    split.title = `Ø Ladeleistung ${fmtW(vm.battery.meanCharge)} W, Ø Entladeleistung ${fmtW(vm.battery.meanDischarge)} W `
+      + `— netto ${fmtW(Math.abs(vm.battery.net))} W ${vm.battery.net < 0 ? 'ins Speichern' : 'aus dem Speicher'}`;
+  }
 
   $('houseTotal').innerHTML = `${fmtW(f.house)}<span class="unit">W</span>`;
 
@@ -1121,7 +1150,9 @@ function renderDetails() {
     $('snapshotMetrics').innerHTML = `<div class="metric">${'<div class="micro label">Keine Daten</div>'}</div>`;
     $('snapshotTime').textContent = '—';
   } else {
-    const batt = vm.flow || { charging: last.battery_power_watt < 0, batteryMagnitude: Math.abs(last.battery_power_watt) };
+    // Die Momentaufnahme zeigt immer die letzte Messung, unabhaengig vom
+    // Ansichtsmodus des Flussdiagramms. Vorzeichen nach der verifizierten
+    // Konvention: negativ = laden.
     const chg = last.battery_power_watt < 0;
     const mag = Math.abs(last.battery_power_watt);
     $('snapshotTime').textContent = `Stand ${fmtLabel(last.t)} Uhr`;

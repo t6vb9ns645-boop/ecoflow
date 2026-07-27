@@ -11,7 +11,7 @@ import {
   presetRange, filterRows, pickGranularity, aggregateRows, aggregatePlugRows,
   averageRow, dataQuality, dataFreshness, PRESET_LABELS,
 } from './filters.mjs';
-import { energyTotals, flowModel, houseBreakdown } from './energy.mjs';
+import { energyTotals, flowModel, houseBreakdown, batteryFlows } from './energy.mjs';
 import { groupPlugs, plugSummary, latestPlugMeasurements } from './plugs.mjs';
 
 /** Anfangszustand: heute, Leistungsübersicht zuerst, Live-Momentaufnahme. */
@@ -82,6 +82,9 @@ export function buildViewModel(allRows, allPlugRows, state, now = new Date()) {
     presetLabel: PRESET_LABELS[state.preset] || 'Zeitraum',
     energy: energyTotals(filtered),
     flow,
+    // Lade-/Entladeanteil getrennt — im Ø-Modus zeigt der Netto-Pfeil allein
+    // nicht, dass beide Richtungen vorkamen.
+    battery: batteryFlows(filtered),
     houseBreakdown: flow ? houseBreakdown(flow, latestPlugs) : null,
     plugs: { groups: plugGroups, summary: plugSummary(plugGroups), latest: latestPlugs },
     quality: dataQuality(display, isAllZero),

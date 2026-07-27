@@ -208,6 +208,33 @@
 </head>
 <body>
 
+<!-- ══ Archiv-Hinweis (bei der Archivierung ergänzt, sonst unveränderte v3.7.0) ══
+     Ohne diesen Balken wäre die archivierte Version eine Sackgasse: Es gäbe
+     keinen sichtbaren Weg zurück zur aktuellen Fassung. -->
+<style>
+  #archive-bar{position:sticky;top:0;z-index:9998;display:flex;align-items:center;gap:12px;
+    flex-wrap:wrap;padding:9px 18px;background:#1F1608;border-bottom:1px solid #4A3616;
+    font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:12px;color:#F2C97A;}
+  #archive-bar .ab-tag{background:rgba(242,169,59,.18);border:1px solid rgba(242,169,59,.4);
+    color:#F2A93B;border-radius:20px;padding:2px 9px;font-size:10px;font-weight:700;
+    letter-spacing:.08em;text-transform:uppercase;flex-shrink:0;}
+  #archive-bar a{margin-left:auto;color:#1a1208;background:#F2A93B;text-decoration:none;
+    font-weight:600;padding:6px 13px;border-radius:6px;white-space:nowrap;}
+  #archive-bar a:hover{filter:brightness(1.08);}
+  #archive-bar .ab-note{width:100%;color:#C9A268;font-size:11px;line-height:1.5;}
+  @media (max-width:560px){ #archive-bar a{margin-left:0;} }
+</style>
+<div id="archive-bar">
+  <span class="ab-tag">Archiv</span>
+  <span>Du siehst die frühere Version <strong>v3.7.0</strong>. Sie liest dieselben Messdaten und
+    liefert dieselben Energie-Kennzahlen wie die aktuelle Fassung.</span>
+  <a id="backToLatest" href="../../index.html">→ Zur aktuellen Version</a>
+  <span class="ab-note">Bekannte Abweichung dieser Version: Die Kachel „Batterie-Leistung" und der
+    Untertitel des Batterie-Diagramms benennen Laden und Entladen vertauscht (positiv wird als „lädt"
+    ausgewiesen, tatsächlich entlädt der Speicher dabei). Die Energie-Kennzahlen sind davon nicht
+    betroffen. In v4.0.0 ist das korrigiert.</span>
+</div>
+
 <div id="login-wall">
   <div class="login-box">
     <p class="login-logo">EcoFlow BKW — Dashboard</p>

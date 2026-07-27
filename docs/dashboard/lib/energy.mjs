@@ -115,6 +115,42 @@ export function energyTotals(rows) {
 }
 
 /**
+ * Trennt Lade- und Entladeanteil über einen Zeitraum.
+ *
+ * Nötig, weil ein Zeitraum-Mittelwert beide Richtungen zu EINER Zahl verrechnet:
+ * lädt der Speicher die Hälfte der Zeit mit -150 W und entlädt die andere Hälfte
+ * mit +40 W, ergibt das netto -55 W. Der Pfeil zeigt dann korrekt "lädt", aber
+ * dass ebenso viel Energie zurückgeflossen ist, bliebe unsichtbar.
+ *
+ * `meanCharge`/`meanDischarge` sind über den GESAMTEN Zeitraum gemittelt (nicht
+ * nur über die jeweiligen Phasen), damit `meanDischarge - meanCharge === net`
+ * gilt und die Zahlen zum Netto-Pfeil passen.
+ */
+export function batteryFlows(rows) {
+  const vals = rows
+    .map((r) => Number(r.battery_power_watt))
+    .filter((v) => !Number.isNaN(v));
+  if (!vals.length) {
+    return { meanCharge: 0, meanDischarge: 0, net: 0, chargeSamples: 0, dischargeSamples: 0, bidirectional: false };
+  }
+  let chargeSum = 0, dischargeSum = 0, chargeSamples = 0, dischargeSamples = 0;
+  for (const v of vals) {
+    if (v < 0) { chargeSum += -v; chargeSamples++; } else if (v > 0) { dischargeSum += v; dischargeSamples++; }
+  }
+  const meanCharge = chargeSum / vals.length;
+  const meanDischarge = dischargeSum / vals.length;
+  return {
+    meanCharge,
+    meanDischarge,
+    net: meanDischarge - meanCharge,
+    chargeSamples,
+    dischargeSamples,
+    // Beide Richtungen kamen im Zeitraum tatsaechlich vor.
+    bidirectional: chargeSamples > 0 && dischargeSamples > 0,
+  };
+}
+
+/**
  * Modell des Stromflusses für das Übersichts-Diagramm.
  * `row` ist entweder die letzte Messzeile (Live) oder ein Durchschnitt (Zeitraum).
  */
