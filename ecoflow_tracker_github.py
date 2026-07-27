@@ -246,8 +246,12 @@ def extract_smartplug(data):
 
     Feldnamen und Skalierung sind bei Smart Plugs nicht offiziell dokumentiert;
     Quelle ist die Community-Referenz der Home-Assistant-Integration
-    hassio-ecoflow-cloud (docs/devices/Smart_Plug-Public.md). Watt/Volt/Temp
-    sind wie bei PowerStream Integer×10 kodiert, Strom liegt in Milliampere.
+    hassio-ecoflow-cloud (docs/devices/Smart_Plug-Public.md), die fuer
+    Watt/Volt/Temp dieselbe Integer×10-Kodierung wie bei PowerStream annimmt.
+    Anhand der realen DEBUG-Rohdaten der ersten produktiven Plugs (CHANGELOG)
+    verifiziert: `watts` ist tatsaechlich ×10 kodiert (Dezi-Watt), `volt` und
+    `temp` sind dagegen bereits Endwerte (z. B. 235 -> 235 V, 34 -> 34 °C) und
+    duerfen NICHT durch 10 geteilt werden. Strom liegt in Milliampere.
     switch_sta und led_brightness sind Rohwerte ohne Skalierung.
     """
     watts    = get_field(data, "2_1.watts",      "watts")
@@ -262,9 +266,9 @@ def extract_smartplug(data):
     return {
         "watts":          safe_float(watts, divisor=10),
         "switch_sta":     safe_float(switch),
-        "volt":           safe_float(volt,    divisor=10),
+        "volt":           safe_float(volt),
         "current_a":      safe_float(current, divisor=1000),
-        "temp_c":         safe_float(temp,    divisor=10),
+        "temp_c":         safe_float(temp),
         "led_brightness": safe_float(bright),
     }
 
@@ -307,6 +311,59 @@ def migrate_csv_if_needed(csv_file, fieldnames, schema_version):
         log("INFO", f"✓ CSV-Migration abgeschlossen (v{schema_version}) — {csv_file}")
     except Exception as e:
         log("ERROR", f"CSV-Migration fehlgeschlagen ({csv_file}): {e}")
+
+def fix_smartplug_scale_if_needed(csv_file):
+    """
+    Einmalige Selbstkorrektur des Skalierungsfehlers aus CHANGELOG [4.2.2]:
+    extract_smartplug() teilte volt/temp bis zu diesem Fix fälschlich durch
+    10 (z. B. 235 V -> 23.5 V). Betroffene Bestandszeilen sind daran zu
+    erkennen, dass volt < 100 ist — für ein am 230-V-Netz betriebenes Gerät
+    physikalisch unmöglich, daher ein eindeutiges Signal für die alte
+    Skalierung. Korrigiert volt und temp_c dort per ×10.
+
+    Idempotent (bereits korrekte Zeilen mit volt >= 100 bleiben unangetastet)
+    und läuft daher gefahrlos bei jedem Start mit. Das fängt automatisch auch
+    Zeilen ab, die zwischen Code-Fix und Deployment noch mit dem alten Code
+    geschrieben wurden — ohne manuellen Migrations-Wettlauf mit laufenden
+    Collector-Durchläufen.
+    """
+    if not os.path.exists(csv_file):
+        return
+    try:
+        with open(csv_file, "r", newline="") as f:
+            reader = csv.DictReader(f)
+            fieldnames = reader.fieldnames
+            if not fieldnames or "volt" not in fieldnames or "temp_c" not in fieldnames:
+                return
+            rows = list(reader)
+
+        fixed = 0
+        for row in rows:
+            try:
+                v = float(row["volt"])
+            except (KeyError, ValueError):
+                continue
+            if not (0 < v < 100):
+                continue
+            row["volt"] = str(round(v * 10, 1))
+            try:
+                t = float(row["temp_c"])
+                row["temp_c"] = str(round(t * 10, 1))
+            except (KeyError, ValueError):
+                pass
+            fixed += 1
+
+        if fixed == 0:
+            return
+
+        with open(csv_file, "w", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(rows)
+
+        log("INFO", f"✓ Skalierungsfehler in {fixed} Bestandszeile(n) korrigiert (volt/temp_c ×10) — {csv_file}")
+    except Exception as e:
+        log("ERROR", f"Skalierungskorrektur fehlgeschlagen ({csv_file}): {e}")
 
 # =============================================================================
 # TAGESERZEUGUNG
@@ -437,6 +494,7 @@ def main():
     # Schema-Migration vor jedem Lauf — idempotent und schnell
     migrate_csv_if_needed(CSV_FILENAME, CSV_FIELDNAMES, CSV_SCHEMA_VERSION)
     migrate_csv_if_needed(CSV_SMARTPLUGS_FILENAME, SMARTPLUG_FIELDNAMES, SMARTPLUG_SCHEMA_VERSION)
+    fix_smartplug_scale_if_needed(CSV_SMARTPLUGS_FILENAME)
 
     ps_data = query_device(POWERSTREAM_SN, "PowerStream")
     ps = extract_powerstream(ps_data)

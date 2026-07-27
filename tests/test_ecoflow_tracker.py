@@ -17,30 +17,33 @@ import ecoflow_tracker_github as tracker
 
 
 class ExtractSmartplugTests(unittest.TestCase):
-    def test_scales_powerstream_style_encoded_fields(self):
-        # 2_1.watts/volt/temp sind Integer×10 kodiert, current in Milliampere.
+    def test_scales_watts_and_current_but_not_volt_and_temp(self):
+        # 2_1.watts ist Integer×10 kodiert (Dezi-Watt), current in Milliampere.
+        # 2_1.volt/2_1.temp sind bereits Endwerte -- anhand realer DEBUG-
+        # Rohdaten produktiver Plugs verifiziert (CHANGELOG): z. B. volt=235
+        # bedeutet 235 V, nicht 23.5 V; temp=34 bedeutet 34 °C, nicht 3.4 °C.
         raw = {
             "2_1.watts": 1234,
             "2_1.switchSta": 1,
-            "2_1.volt": 2300,
+            "2_1.volt": 235,
             "2_1.current": 5360,
-            "2_1.temp": 245,
+            "2_1.temp": 34,
             "2_1.brightness": 512,
         }
         result = tracker.extract_smartplug(raw)
         self.assertEqual(result["watts"], 123.4)
         self.assertEqual(result["switch_sta"], 1.0)
-        self.assertEqual(result["volt"], 230.0)
+        self.assertEqual(result["volt"], 235.0)
         self.assertEqual(result["current_a"], 5.4)
-        self.assertEqual(result["temp_c"], 24.5)
+        self.assertEqual(result["temp_c"], 34.0)
         self.assertEqual(result["led_brightness"], 512.0)
 
     def test_falls_back_to_bare_keys_without_prefix(self):
-        raw = {"watts": 500, "switchSta": 0, "volt": 2280}
+        raw = {"watts": 500, "switchSta": 0, "volt": 231}
         result = tracker.extract_smartplug(raw)
         self.assertEqual(result["watts"], 50.0)
         self.assertEqual(result["switch_sta"], 0.0)
-        self.assertEqual(result["volt"], 228.0)
+        self.assertEqual(result["volt"], 231.0)
 
     def test_missing_fields_default_to_zero(self):
         result = tracker.extract_smartplug({})
@@ -137,6 +140,73 @@ class MigrateCsvIfNeededTests(unittest.TestCase):
         tracker.migrate_csv_if_needed(self.csv_file, ["timestamp", "watts"], 2)
         rows = self._read_csv()
         self.assertEqual(rows, [{"timestamp": "t1", "watts": "10"}])
+
+
+class FixSmartplugScaleIfNeededTests(unittest.TestCase):
+    FIELDS = ["timestamp", "plug_sn", "plug_name", "watts", "switch_sta", "volt", "current_a", "temp_c", "led_brightness"]
+
+    def setUp(self):
+        self.tmpdir = tempfile.TemporaryDirectory()
+        self.csv_file = os.path.join(self.tmpdir.name, "test.csv")
+
+    def tearDown(self):
+        self.tmpdir.cleanup()
+
+    def _write_csv(self, rows):
+        with open(self.csv_file, "w", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=self.FIELDS)
+            writer.writeheader()
+            writer.writerows(rows)
+
+    def _read_csv(self):
+        with open(self.csv_file, "r", newline="") as f:
+            return list(csv.DictReader(f))
+
+    def _row(self, volt, temp_c):
+        return {
+            "timestamp": "t1", "plug_sn": "A", "plug_name": "Kuehlschrank", "watts": "10",
+            "switch_sta": "1", "volt": volt, "current_a": "0.5", "temp_c": temp_c, "led_brightness": "511",
+        }
+
+    def test_noop_when_file_does_not_exist(self):
+        tracker.fix_smartplug_scale_if_needed(self.csv_file)
+        self.assertFalse(os.path.exists(self.csv_file))
+
+    def test_corrects_rows_with_implausibly_low_volt(self):
+        self._write_csv([self._row("23.5", "3.4")])
+        tracker.fix_smartplug_scale_if_needed(self.csv_file)
+        rows = self._read_csv()
+        self.assertEqual(rows[0]["volt"], "235.0")
+        self.assertEqual(rows[0]["temp_c"], "34.0")
+
+    def test_leaves_already_correct_rows_untouched(self):
+        self._write_csv([self._row("235.0", "34.0")])
+        mtime_before = os.path.getmtime(self.csv_file)
+        tracker.fix_smartplug_scale_if_needed(self.csv_file)
+        self.assertEqual(os.path.getmtime(self.csv_file), mtime_before)
+
+    def test_is_idempotent_across_repeated_runs(self):
+        self._write_csv([self._row("23.5", "3.4")])
+        tracker.fix_smartplug_scale_if_needed(self.csv_file)
+        tracker.fix_smartplug_scale_if_needed(self.csv_file)
+        rows = self._read_csv()
+        self.assertEqual(rows[0]["volt"], "235.0")
+
+    def test_handles_mixed_old_and_new_rows_in_the_same_file(self):
+        # Simuliert die reale Situation: Zeilen mit altem Code (klein) neben
+        # bereits nach dem Fix geschriebenen Zeilen (korrekt) im selben Lauf.
+        self._write_csv([self._row("23.5", "3.4"), self._row("236.0", "33.0")])
+        tracker.fix_smartplug_scale_if_needed(self.csv_file)
+        rows = self._read_csv()
+        self.assertEqual(rows[0]["volt"], "235.0")
+        self.assertEqual(rows[1]["volt"], "236.0")
+
+    def test_ignores_zero_and_empty_volt(self):
+        self._write_csv([self._row("0", "0"), self._row("", "")])
+        tracker.fix_smartplug_scale_if_needed(self.csv_file)
+        rows = self._read_csv()
+        self.assertEqual(rows[0]["volt"], "0")
+        self.assertEqual(rows[1]["volt"], "")
 
 
 class AppendRowsToCsvTests(unittest.TestCase):
