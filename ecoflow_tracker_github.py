@@ -246,8 +246,12 @@ def extract_smartplug(data):
 
     Feldnamen und Skalierung sind bei Smart Plugs nicht offiziell dokumentiert;
     Quelle ist die Community-Referenz der Home-Assistant-Integration
-    hassio-ecoflow-cloud (docs/devices/Smart_Plug-Public.md). Watt/Volt/Temp
-    sind wie bei PowerStream Integer×10 kodiert, Strom liegt in Milliampere.
+    hassio-ecoflow-cloud (docs/devices/Smart_Plug-Public.md), die fuer
+    Watt/Volt/Temp dieselbe Integer×10-Kodierung wie bei PowerStream annimmt.
+    Anhand der realen DEBUG-Rohdaten der ersten produktiven Plugs (CHANGELOG)
+    verifiziert: `watts` ist tatsaechlich ×10 kodiert (Dezi-Watt), `volt` und
+    `temp` sind dagegen bereits Endwerte (z. B. 235 -> 235 V, 34 -> 34 °C) und
+    duerfen NICHT durch 10 geteilt werden. Strom liegt in Milliampere.
     switch_sta und led_brightness sind Rohwerte ohne Skalierung.
     """
     watts    = get_field(data, "2_1.watts",      "watts")
@@ -262,9 +266,9 @@ def extract_smartplug(data):
     return {
         "watts":          safe_float(watts, divisor=10),
         "switch_sta":     safe_float(switch),
-        "volt":           safe_float(volt,    divisor=10),
+        "volt":           safe_float(volt),
         "current_a":      safe_float(current, divisor=1000),
-        "temp_c":         safe_float(temp,    divisor=10),
+        "temp_c":         safe_float(temp),
         "led_brightness": safe_float(bright),
     }
 

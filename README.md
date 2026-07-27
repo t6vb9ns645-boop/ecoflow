@@ -199,11 +199,15 @@ zusätzlich als eigener Posten in der Hausnetz-Aufschlüsselung auf. Die Farbe
 eines Plugs leitet sich aus seiner Seriennummer ab und bleibt daher stabil,
 auch wenn Plugs hinzukommen oder ausfallen.
 
-⚠️ Die Feldnamen/Skalierung der Smart-Plug-API sind bei EcoFlow nicht
-offiziell dokumentiert (Quelle: Community-Referenz
-[hassio-ecoflow-cloud](https://github.com/tolwi/hassio-ecoflow-cloud)) — beim
-ersten echten Plug lohnt ein Blick ins `DEBUG`-Log des Workflow-Runs, um die
-Rohwerte zu verifizieren.
+⚠️ Die Feldnamen der Smart-Plug-API sind bei EcoFlow nicht offiziell
+dokumentiert (Quelle: Community-Referenz
+[hassio-ecoflow-cloud](https://github.com/tolwi/hassio-ecoflow-cloud)). Die
+Skalierung wurde inzwischen anhand echter `DEBUG`-Rohdaten produktiver Plugs
+verifiziert (CHANGELOG): `watts` ist ×10 kodiert (Dezi-Watt), `volt` und
+`temp_c` sind dagegen bereits Endwerte (V bzw. °C) und werden **nicht**
+durch 10 geteilt — abweichend von der ursprünglichen Community-Annahme.
+Kommt ein neuer Plug-Typ mit abweichendem Verhalten dazu, lohnt erneut ein
+Blick ins `DEBUG`-Log, um die Rohwerte zu prüfen.
 
 ## 📈 Erfasste Daten (Schema v2 · 20 Spalten)
 
