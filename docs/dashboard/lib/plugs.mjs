@@ -7,8 +7,8 @@
  */
 
 export const PLUG_PALETTE = [
-  '#34D399', '#60A5FA', '#F472B6', '#38BDF8',
-  '#4ADE80', '#FBBF24', '#A78BFA', '#FB923C',
+  '#2DD4BF', '#8B93FF', '#FF5D8F', '#FFB020',
+  '#4ADE80', '#38BDF8', '#C084FC', '#FB923C',
 ];
 
 /** Stabiler, kollisionsarmer 32-Bit-Hash über einen String. */
