@@ -16,7 +16,7 @@
 
    Grund: nahezu Schwarz mit leichtem Blaustich, damit die Amber-Akzente
    warm dagegen stehen. Datenfarben sind gegen Farbfehlsichtigkeit geprueft
-   (Amber/Teal/Periwinkle/Rose, paarweise ΔE >= 8 in Deutan/Protan/Tritan).
+   (Amber/Teal/Periwinkle/Rose/Magenta, paarweise ΔE >= 8 in Deutan/Protan/Tritan).
    ═══════════════════════════════════════════════════════════════════════════ */
 :root{
   --bg:#05070A;
@@ -39,6 +39,7 @@
   --batt:#2DD4BF;
   --net:#8B93FF;
   --base:#FF5D8F;
+  --grid:#E879F9;
   --neutral-series:#F5F7FA;
 
   --ok:#2DD4BF;
@@ -310,6 +311,10 @@ button{font-family:inherit;}
 .node.pv .glyph{background:var(--accent-soft);color:var(--solar);}
 .node.pv .nval{color:var(--solar);}
 
+.node.grid{width:108px;}
+.node.grid .glyph{background:rgba(232,121,249,.14);color:var(--grid);}
+.node.grid .nval{color:var(--grid);}
+
 .node.hub{
   width:170px;height:170px;border-radius:46px;display:flex;flex-direction:column;
   align-items:center;justify-content:center;padding:16px;
@@ -576,13 +581,20 @@ footer{margin-top:34px;padding-top:18px;border-top:1px solid var(--hair);
                 <div class="nfoot batt-split" id="battSplit" hidden></div>
                 <div class="pill idle" id="battPill">—</div>
               </div>
+
+              <div class="node grid" id="nodeGrid">
+                <div class="glyph"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 1v4M4 6h8M2.5 9.3h11M1 12.7h14"/></svg></div>
+                <div class="micro nlabel">Netz</div>
+                <div class="nval" id="gridVal">—</div>
+                <div class="nfoot">nicht vom BKW gedeckt</div>
+              </div>
             </div>
 
             <div class="house" id="nodeHouse">
               <div class="house-top">
                 <div class="house-title">
                   <div class="glyph"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 8.3L8 3l6 5.3"/><path d="M3.4 7.4V13.3h9.2V7.4"/></svg></div>
-                  <span class="micro">Hausnetz — AC-Verbrauch</span>
+                  <span class="micro">Hausnetz — Gesamtverbrauch</span>
                 </div>
                 <span class="house-total" id="houseTotal">—</span>
               </div>
@@ -606,11 +618,15 @@ footer{margin-top:34px;padding-top:18px;border-top:1px solid var(--hair);
                   <i><span class="swatch" style="background:var(--solar)"></span>PV → Wechselrichter</i>
                   <i><span class="swatch" style="background:var(--batt)"></span>Wechselrichter ↔ Speicher</i>
                   <i><span class="swatch" style="background:var(--net)"></span>Wechselrichter → Hausnetz</i>
+                  <i><span class="swatch" style="background:var(--grid)"></span>Netz → Hausnetz</i>
                   <i><span class="swatch" style="background:var(--base)"></span>Grundbedarf</i>
                 </div>
-                <p class="info-text"><strong>Topologie:</strong> Der Wechselrichter ist der einzige zentrale
-                  Knoten. PV1 und PV2 speisen ihn, der Speicher hängt ausschließlich an ihm — nicht am Hausnetz —
-                  und das Hausnetz wird ausschließlich über den Wechselrichter versorgt.</p>
+                <p class="info-text"><strong>Topologie:</strong> Der Wechselrichter ist der zentrale Knoten des
+                  Balkonkraftwerks. PV1 und PV2 speisen ihn, der Speicher hängt ausschließlich an ihm — nicht am
+                  Hausnetz. Das Hausnetz wird primär über den Wechselrichter versorgt, zusätzlich aber auch direkt
+                  aus dem Stromnetz, sobald PV und Speicher den Bedarf nicht vollständig decken können — z. B. wenn
+                  die Smart Plugs mehr Leistung ziehen, als das Balkonkraftwerk gerade liefert. Dieser Netzbezug
+                  wird als eigener Knoten „Netz" mit eigener Kante ins Hausnetz dargestellt.</p>
                 <p class="info-text"><strong>Vorzeichen Speicher:</strong> <code>battery_power_watt &lt; 0</code>
                   bedeutet <em>laden</em>, <code>&gt; 0</code> bedeutet <em>entladen</em> (CHANGELOG [3.2.2],
                   an Messdaten verifiziert). Die Pfeilrichtung folgt dieser Konvention.</p>
@@ -749,7 +765,7 @@ import {
 } from './lib/layout.mjs';
 
 /* ── Konfiguration ─────────────────────────────────────────────────────── */
-const DASHBOARD_VERSION = 'v4.0.0';
+const DASHBOARD_VERSION = 'v4.1.0';
 const CSV_PATH = '../ecoflow_energie_daten.csv';
 const SMARTPLUGS_CSV_PATH = '../ecoflow_smartplugs_daten.csv';
 const VERSIONS_MANIFEST = './versions/manifest.json';
@@ -757,7 +773,7 @@ const REFRESH_SECONDS = 30;
 
 const C = {
   solar: '#FFB020', solarAlt: '#FFD48A',
-  batt: '#2DD4BF', net: '#8B93FF', base: '#FF5D8F',
+  batt: '#2DD4BF', net: '#8B93FF', base: '#FF5D8F', grid: '#E879F9',
   neutral: '#F5F7FA', ink3: '#63748A', hair: '#1D2731',
   idle: '#3E4C5C',
 };
@@ -985,12 +1001,19 @@ function renderFlow() {
       + `— netto ${fmtW(Math.abs(vm.battery.net))} W ${vm.battery.net < 0 ? 'ins Speichern' : 'aus dem Speicher'}`;
   }
 
-  $('houseTotal').innerHTML = `${fmtW(f.house)}<span class="unit">W</span>`;
+  $('gridVal').innerHTML = `${fmtW(f.gridConsumption)}<span class="unit">W</span>`;
+  $('nodeGrid').classList.toggle('idle', f.gridConsumption <= 0.5);
+
+  // Gesamtverbrauch = was der Wechselrichter liefert PLUS was zusaetzlich aus
+  // dem Netz bezogen wird, weil das Balkonkraftwerk (PV/Speicher) den Bedarf
+  // (z. B. der Smart Plugs) nicht allein decken kann.
+  $('houseTotal').innerHTML = `${fmtW(f.house + f.gridConsumption)}<span class="unit">W</span>`;
 
   const bd = vm.houseBreakdown;
   const colorOf = (item) => {
     if (item.kind === 'plug') return vm.plugs.latest.find((p) => `plug:${p.plug_sn}` === item.key)?.color || C.net;
     if (item.kind === 'base') return C.base;
+    if (item.kind === 'grid') return C.grid;
     return C.idle;
   };
   $('houseSplit').innerHTML = bd.items
@@ -1016,6 +1039,7 @@ function layoutNodes() {
   cluster.style.height = `${L.height}px`;
   put($('nodePv1'), L.pv1); put($('nodePv2'), L.pv2);
   put($('nodeHub'), L.hub); put($('nodeBatt'), L.batt);
+  put($('nodeGrid'), L.grid);
 }
 
 function drawWires() {
@@ -1127,11 +1151,23 @@ function drawWires() {
   const [bc1, bc2] = edgeControlPoints(bA, bB);
   wire(bA, bB, bc1, bc2, C.batt, f.batteryMagnitude, f.batteryMagnitude > 0.5, !f.charging);
 
-  // Wechselrichter -> Hausnetz
+  // Wechselrichter -> Hausnetz UND Netz -> Hausnetz: zwei unabhaengige
+  // Quellen, beide versetzt vom Zentrum, damit keine Linie die andere
+  // verdeckt (gleiches Muster wie PV1/PV2 -> Wechselrichter oben).
   const houseTop = anchor($('nodeHouse'), 'top');
-  const hMid = hubBottom.y + (houseTop.y - hubBottom.y) * 0.5;
-  wire(hubBottom, houseTop, { x: hubBottom.x, y: hMid }, { x: houseTop.x, y: hMid },
+  const houseOffset = Math.max(24, $('nodeHouse').offsetWidth * 0.08);
+
+  const hubTarget = { x: houseTop.x + houseOffset, y: houseTop.y };
+  const hMid = hubBottom.y + (hubTarget.y - hubBottom.y) * 0.5;
+  wire(hubBottom, hubTarget, { x: hubBottom.x, y: hMid }, { x: hubTarget.x, y: hMid },
     C.net, f.house, f.house > 0.5, false);
+
+  const gridEl = $('nodeGrid');
+  const gridBottom = anchor(gridEl, 'bottom');
+  const gridTarget = { x: houseTop.x - houseOffset, y: houseTop.y };
+  const gMid = gridBottom.y + (gridTarget.y - gridBottom.y) * 0.55;
+  wire(gridBottom, gridTarget, { x: gridBottom.x, y: gMid }, { x: gridTarget.x, y: gMid },
+    C.grid, f.gridConsumption, f.gridConsumption > 0.5, false);
 }
 
 /* ── Tab 02: Einzelwerte ───────────────────────────────────────────────── */
