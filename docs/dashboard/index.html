@@ -545,7 +545,7 @@ footer{margin-top:34px;padding-top:18px;border-top:1px solid var(--hair);
 
           <div class="flow-toggle" id="flowToggle">
             <button data-mode="live" class="active">Live-Momentaufnahme</button>
-            <button data-mode="period">Ø Zeitraum</button>
+            <button data-mode="period">Σ Zeitraum</button>
           </div>
 
           <div id="flowEmpty" class="empty" hidden>Keine Daten im gewählten Zeitraum.</div>
@@ -630,9 +630,11 @@ footer{margin-top:34px;padding-top:18px;border-top:1px solid var(--hair);
                 <p class="info-text"><strong>Vorzeichen Speicher:</strong> <code>battery_power_watt &lt; 0</code>
                   bedeutet <em>laden</em>, <code>&gt; 0</code> bedeutet <em>entladen</em> (CHANGELOG [3.2.2],
                   an Messdaten verifiziert). Die Pfeilrichtung folgt dieser Konvention.</p>
-                <p class="info-text"><strong>Live vs. Ø:</strong> „Live" zeigt die zuletzt erfasste Messung,
-                  „Ø Zeitraum" den Durchschnitt über den oben gewählten Zeitraum. Der Zeitraum selbst gilt
-                  für beide Ansichten gleichermaßen.</p>
+                <p class="info-text"><strong>Live vs. Σ:</strong> „Live" zeigt die zuletzt erfasste Messung
+                  in Watt, „Σ Zeitraum" die über den oben gewählten (Menü-)Filter kumulierte Energie in
+                  Wh/kWh — zeitgewichtet aus den Rohmessungen aufsummiert, nicht gemittelt. Der Ladezustand
+                  (SOC) ist davon ausgenommen und zeigt weiterhin den letzten bekannten Stand im Zeitraum.
+                  Der Zeitraum selbst gilt für beide Ansichten gleichermaßen.</p>
               </div>
             </div></div>
           </div>
@@ -765,7 +767,7 @@ import {
 } from './lib/layout.mjs';
 
 /* ── Konfiguration ─────────────────────────────────────────────────────── */
-const DASHBOARD_VERSION = 'v4.1.0';
+const DASHBOARD_VERSION = 'v4.1.1';
 const CSV_PATH = '../ecoflow_energie_daten.csv';
 const SMARTPLUGS_CSV_PATH = '../ecoflow_smartplugs_daten.csv';
 const VERSIONS_MANIFEST = './versions/manifest.json';
@@ -962,6 +964,19 @@ $('flowToggle').addEventListener('click', (e) => {
   render();
 });
 
+/**
+ * Formatiert einen Flusswert je nach Ansichtsmodus: Live zeigt eine
+ * Momentanleistung in W, Σ Zeitraum die über den Menü-Filter kumulierte
+ * Energie in Wh/kWh (siehe flowCumulative() in energy.mjs).
+ */
+function flowValueParts(v) {
+  return state.flowMode === 'live' ? { value: fmtW(v), unit: 'W' } : fmtEnergy(v);
+}
+function flowValueHtml(v) {
+  const p = flowValueParts(v);
+  return `${p.value}<span class="unit">${p.unit}</span>`;
+}
+
 function renderFlow() {
   const hasFlow = !!vm.flow;
   $('stage').hidden = !hasFlow;
@@ -971,43 +986,47 @@ function renderFlow() {
   const f = vm.flow;
   $('flowAside').textContent = state.flowMode === 'live'
     ? `Stand ${fmtLabel(vm.lastRow.t)} Uhr`
-    : `Ø aus ${fmtCount(vm.filtered.length)} Messwerten`;
+    : `Σ ${vm.rangeLabel} · ${fmtCount(vm.filtered.length)} Messwerte`;
 
-  $('pv1Val').innerHTML = `${fmtW(f.pv1)}<span class="unit">W</span>`;
-  $('pv2Val').innerHTML = `${fmtW(f.pv2)}<span class="unit">W</span>`;
+  $('pv1Val').innerHTML = flowValueHtml(f.pv1);
+  $('pv2Val').innerHTML = flowValueHtml(f.pv2);
   $('nodePv1').classList.toggle('idle', f.pv1 <= 0);
   $('nodePv2').classList.toggle('idle', f.pv2 <= 0);
-  $('hubVal').innerHTML = `${fmtW(f.pvTotal)}<span class="unit">W</span>`;
+  $('hubVal').innerHTML = flowValueHtml(f.pvTotal);
   $('socVal').innerHTML = `${fmtW(f.soc)}<span class="unit">%</span>`;
-  $('battWattVal').textContent = `${f.charging ? '−' : '+'}${fmtW(f.batteryMagnitude)} W`;
+  const battMag = flowValueParts(f.batteryMagnitude);
+  $('battWattVal').textContent = `${f.charging ? '−' : '+'}${battMag.value} ${battMag.unit}`;
   $('socFill').setAttribute('width', Math.max(0.4, (f.soc / 100) * 7.5).toFixed(2));
 
   const pill = $('battPill');
   pill.className = `pill ${f.batteryState === 'lädt' ? 'charge' : f.batteryState === 'entlädt' ? 'discharge' : 'idle'}`;
   pill.textContent = f.batteryState;
 
-  // Im Ø-Modus verrechnet der Mittelwert Laden und Entladen zu einer Zahl.
-  // Kamen beide Richtungen vor, werden sie zusaetzlich getrennt ausgewiesen —
-  // sonst sähe ein Zeitraum mit viel Umsatz in beide Richtungen aus wie
-  // Stillstand.
+  // Im Σ-Modus verrechnet der Netto-Wert Lade- und Entladeenergie zu einer
+  // Zahl. Kamen beide Richtungen vor, werden sie zusaetzlich getrennt
+  // ausgewiesen — sonst sähe ein Zeitraum mit viel Umsatz in beide
+  // Richtungen aus wie Stillstand.
   const split = $('battSplit');
   const showSplit = state.flowMode === 'period' && vm.battery.bidirectional;
   split.hidden = !showSplit;
   if (showSplit) {
-    split.innerHTML = `<span style="color:var(--batt)">↓ ${fmtW(vm.battery.meanCharge)}</span>`
+    const c = fmtEnergy(f.chargeWh);
+    const d = fmtEnergy(f.dischargeWh);
+    const net = fmtEnergy(Math.abs(f.batteryWatt));
+    split.innerHTML = `<span style="color:var(--batt)">↓ ${c.value} ${c.unit}</span>`
       + ` <span style="color:var(--ink3)">·</span> `
-      + `<span style="color:var(--accent)">↑ ${fmtW(vm.battery.meanDischarge)} W</span>`;
-    split.title = `Ø Ladeleistung ${fmtW(vm.battery.meanCharge)} W, Ø Entladeleistung ${fmtW(vm.battery.meanDischarge)} W `
-      + `— netto ${fmtW(Math.abs(vm.battery.net))} W ${vm.battery.net < 0 ? 'ins Speichern' : 'aus dem Speicher'}`;
+      + `<span style="color:var(--accent)">↑ ${d.value} ${d.unit}</span>`;
+    split.title = `Geladen ${c.value} ${c.unit}, entladen ${d.value} ${d.unit} `
+      + `— netto ${net.value} ${net.unit} ${f.charging ? 'ins Speichern' : 'aus dem Speicher'}`;
   }
 
-  $('gridVal').innerHTML = `${fmtW(f.gridConsumption)}<span class="unit">W</span>`;
+  $('gridVal').innerHTML = flowValueHtml(f.gridConsumption);
   $('nodeGrid').classList.toggle('idle', f.gridConsumption <= 0.5);
 
   // Gesamtverbrauch = was der Wechselrichter liefert PLUS was zusaetzlich aus
   // dem Netz bezogen wird, weil das Balkonkraftwerk (PV/Speicher) den Bedarf
   // (z. B. der Smart Plugs) nicht allein decken kann.
-  $('houseTotal').innerHTML = `${fmtW(f.house + f.gridConsumption)}<span class="unit">W</span>`;
+  $('houseTotal').innerHTML = flowValueHtml(f.house + f.gridConsumption);
 
   const bd = vm.houseBreakdown;
   const colorOf = (item) => {
@@ -1022,7 +1041,7 @@ function renderFlow() {
     <div class="tile">
       <span class="rail" style="background:${colorOf(i)}"></span>
       <div class="tname" title="${escapeHtml(i.name)}">${escapeHtml(i.name)}</div>
-      <div class="tval">${fmtW(i.watts)}<span class="unit">W</span></div>
+      <div class="tval">${flowValueHtml(i.watts)}</div>
       <div class="tfoot micro">${(i.share * 100).toFixed(0)} % v. Hausnetz</div>
     </div>`).join('');
 
@@ -1121,7 +1140,8 @@ function drawWires() {
     label.style.left = `${mid.x}px`;
     label.style.top = `${mid.y}px`;
     label.style.color = active ? color : C.ink3;
-    label.textContent = `${active ? arrowGlyph(a, b) : '·'} ${fmtW(watt)} W`;
+    const parts = flowValueParts(watt);
+    label.textContent = `${active ? arrowGlyph(a, b) : '·'} ${parts.value} ${parts.unit}`;
     stage.appendChild(label);
   }
 
