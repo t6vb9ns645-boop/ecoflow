@@ -173,69 +173,11 @@ export function flowModel(row) {
 }
 
 /**
- * Kumuliertes Modell des Stromflusses für das Übersichts-Diagramm im
- * „Σ Zeitraum"-Modus.
- *
- * Trägt DIESELBEN Feldnamen wie `flowModel()` (`pv1`, `house`, `toPlugs`, …),
- * damit `houseBreakdown()`, `buildEdges()` und die Diagramm-Anbindung ohne
- * Fallunterscheidung beide Modi bedienen — die Felder enthalten hier aber
- * über den gesamten Zeitraum aufsummierte Energie in Wh statt einer
- * Momentanleistung in W. Nutzt dieselbe zeitgewichtete Integration wie
- * `energyTotals()`, damit beide Kennzahlen zum selben Zeitraum-Filter passen.
- *
- * `soc` ist eine Ausnahme: ein Ladezustand lässt sich nicht aufsummieren,
- * daher zeigt er den letzten gültigen Messwert im Zeitraum (Endstand).
- */
-export function flowCumulative(rows) {
-  const chargeWh = calcEnergyWh(rows, (r) => chargePower(r.battery_power_watt));
-  const dischargeWh = calcEnergyWh(rows, (r) => dischargePower(r.battery_power_watt));
-  const netWh = dischargeWh - chargeWh;
-
-  let soc = 0;
-  for (let i = rows.length - 1; i >= 0; i--) {
-    const v = Number(rows[i].battery_soc_percent);
-    if (!Number.isNaN(v)) { soc = v; break; }
-  }
-
-  return {
-    pv1: calcEnergyWh(rows, (r) => num(r.pv1_watt)),
-    pv2: calcEnergyWh(rows, (r) => num(r.pv2_watt)),
-    pvTotal: calcEnergyWh(rows, pvTotal),
-    batteryWatt: netWh,
-    charging: isCharging(netWh),
-    batteryMagnitude: Math.abs(netWh),
-    batteryState: batteryState(netWh),
-    chargeWh,
-    dischargeWh,
-    soc,
-    house: calcEnergyWh(rows, (r) => num(r.ac_house_watt)),
-    toPlugs: calcEnergyWh(rows, (r) => num(r.inv_to_plug_watt)),
-    baseLoad: calcEnergyWh(rows, (r) => num(r.permanent_watt)),
-    gridConsumption: calcEnergyWh(rows, (r) => Math.max(0, num(r.grid_cons_watt))),
-  };
-}
-
-/**
  * Aufschlüsselung des Hausnetzes in Einzelposten.
  * `plugs` sind die zuletzt gemessenen Smart Plugs (kann leer sein).
  *
- * Unit-agnostisch: `flow` kommt entweder aus `flowModel()` (W, Live-Modus)
- * oder aus `flowCumulative()` (Wh, Σ-Zeitraum-Modus); `plugs[].watts` folgt
- * derselben Einheit (siehe `latestPlugMeasurements()` bzw.
- * `cumulativePlugMeasurements()` in `plugs.mjs`). Die Funktion selbst rechnet
- * nur relativ (Summen, Anteile) und ist daher für beide Fälle korrekt.
- *
  * - `unassigned`: Steckdosenleistung, die keinem konfigurierten Plug zugeordnet ist
  * - `residual`:   Rest zwischen AC-Hausverbrauch und den erfassten Teilströmen
- * - `grid`:       Anteil, den das Balkonkraftwerk (PV/Speicher) nicht decken konnte
- *                 und der stattdessen aus dem Stromnetz bezogen wurde
- *                 (`grid_cons_watt`, siehe CHANGELOG „Netzbezug im Hausnetz sichtbar").
- *                 Die Smart Plugs messen ihren eigenen Verbrauch unabhängig vom
- *                 Wechselrichter — reicht dessen Steckdosen-Ausgang (`toPlugs`)
- *                 nicht aus, deckt der Rest der Plug-Summe (nicht `unassigned`,
- *                 das nie negativ wird) faktisch schon Netzstrom ab; dieser Posten
- *                 macht das zusätzlich explizit sichtbar, statt es unbenannt in der
- *                 Steckdosensumme verschwinden zu lassen.
  */
 export function houseBreakdown(flow, plugs = []) {
   const plugSum = plugs.reduce((s, p) => s + num(p.watts), 0);
@@ -256,29 +198,9 @@ export function houseBreakdown(flow, plugs = []) {
   if (residual > 0) {
     items.push({ key: 'residual', name: 'Sonstiges / nicht erfasst', watts: residual, kind: 'residual' });
   }
-  if (flow.gridConsumption > 0) {
-    items.push({
-      key: 'grid',
-      name: 'Netzbezug (vom Balkonkraftwerk nicht gedeckt)',
-      watts: flow.gridConsumption,
-      kind: 'grid',
-    });
-  }
   const total = items.reduce((s, i) => s + i.watts, 0);
   return {
     items: items.map((i) => ({ ...i, share: total > 0 ? i.watts / total : 0 })),
     total,
   };
-}
-
-/**
- * Gesamter Leistungsbedarf des Hausnetzes aus BEIDEN Quellen: was der
- * Wechselrichter liefert (`flow.house`, aus PV/Speicher) PLUS was zusätzlich
- * aus dem Stromnetz bezogen wird (`flow.gridConsumption`), weil das
- * Balkonkraftwerk den Bedarf (z. B. der Smart Plugs) allein nicht deckt.
- * Beide Werte stammen aus unabhängigen Messungen (Wechselrichter- bzw.
- * Netz-Sensor) und werden hier lediglich addiert, nicht abgeglichen.
- */
-export function houseTotalWatt(flow) {
-  return flow.house + flow.gridConsumption;
 }

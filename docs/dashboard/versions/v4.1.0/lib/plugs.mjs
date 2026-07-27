@@ -6,8 +6,6 @@
  * wegfallen oder die Sortierung sich ändert (in v3.7.0 war das noch anders).
  */
 
-import { calcEnergyWh } from './energy.mjs';
-
 export const PLUG_PALETTE = [
   '#2DD4BF', '#8B93FF', '#FF5D8F', '#FFB020',
   '#4ADE80', '#38BDF8', '#C084FC', '#FB923C',
@@ -53,28 +51,12 @@ export function plugSummary(groups) {
   return { totalWatts, onCount, offCount: groups.length - onCount, count: groups.length };
 }
 
-/** Die jeweils letzte Messung je Plug — Eingabe für houseBreakdown() im Live-Modus. */
+/** Die jeweils letzte Messung je Plug — Eingabe für houseBreakdown(). */
 export function latestPlugMeasurements(groups) {
   return groups.map((g) => ({
     plug_sn: g.sn,
     plug_name: g.name,
     watts: Number(g.last.watts) || 0,
-    switch_sta: Number(g.last.switch_sta) || 0,
-    color: g.color,
-  }));
-}
-
-/**
- * Kumulierte Energie (Wh) je Plug über den Zeitraum der gruppierten
- * Rohmessungen — Eingabe für houseBreakdown() im Σ-Zeitraum-Modus.
- * `groups` muss aus ROH-Zeilen stammen (nicht aggregiert), damit die
- * zeitgewichtete Integration korrekt bleibt (siehe calcEnergyWh()).
- */
-export function cumulativePlugMeasurements(groups) {
-  return groups.map((g) => ({
-    plug_sn: g.sn,
-    plug_name: g.name,
-    watts: calcEnergyWh(g.rows, (r) => Number(r.watts) || 0),
     switch_sta: Number(g.last.switch_sta) || 0,
     color: g.color,
   }));
