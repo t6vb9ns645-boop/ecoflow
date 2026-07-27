@@ -89,6 +89,26 @@ test('der Speicher blockiert nie die mittige Linie zum Hausnetz', () => {
   }
 });
 
+test('der Netz-Knoten steht dem Speicher-Knoten symmetrisch gegenueber', () => {
+  for (const w of WIDTHS) {
+    const l = computeLayout(w);
+    assert.equal(l.grid.y, l.batt.y, `Netz und Speicher nicht auf gleicher Hoehe bei ${w}px`);
+    assert.ok(
+      Math.abs(l.grid.x - (2 * l.centerX - l.batt.x)) < 1e-6,
+      `Netz nicht spiegelsymmetrisch zum Speicher bei ${w}px`,
+    );
+    assert.ok(l.grid.x < l.hub.x, `Netz-Knoten liegt bei ${w}px nicht links vom Hub`);
+  }
+});
+
+test('der Netz-Knoten ueberlappt den Wechselrichter nicht', () => {
+  for (const w of WIDTHS) {
+    const l = computeLayout(w);
+    const hub = box(l.hub, l.sizes.hub, l.sizes.hub);
+    assert.ok(!overlaps(box(l.grid, l.sizes.batt, 120), hub), `Netz ueberlappt Hub bei ${w}px`);
+  }
+});
+
 test('alle Knoten bleiben innerhalb des Containers', () => {
   for (const w of WIDTHS) {
     const l = computeLayout(w);
@@ -167,8 +187,10 @@ test('buildEdges markiert PV nachts als inaktiv', () => {
   assert.equal(edges.find((e) => e.id === 'house').active, true);
 });
 
-test('buildEdges fuehrt genau die drei erlaubten Verbindungen', () => {
-  const edges = buildEdges({ pv1: 1, pv2: 1, batteryWatt: -1, batteryMagnitude: 1, charging: true, house: 1 });
+test('buildEdges fuehrt genau die vier erlaubten Verbindungen', () => {
+  const edges = buildEdges({
+    pv1: 1, pv2: 1, batteryWatt: -1, batteryMagnitude: 1, charging: true, house: 1, gridConsumption: 1,
+  });
   // Kein Pfad darf Speicher und Hausnetz direkt verbinden: der Speicher haengt
   // ausschliesslich am Wechselrichter.
   for (const e of edges) {
@@ -177,6 +199,36 @@ test('buildEdges fuehrt genau die drei erlaubten Verbindungen', () => {
       'unerlaubte Direktverbindung Speicher <-> Hausnetz',
     );
   }
-  // Jede Kante beruehrt den Hub.
-  assert.ok(edges.every((e) => e.from === 'hub' || e.to === 'hub'));
+  // Jede Kante ausser der Netz-Kante beruehrt den Hub — das Netz versorgt
+  // das Hausnetz direkt, unter Umgehung des Wechselrichters.
+  const nonGrid = edges.filter((e) => e.id !== 'grid');
+  assert.ok(nonGrid.every((e) => e.from === 'hub' || e.to === 'hub'));
+  const grid = edges.find((e) => e.id === 'grid');
+  assert.equal(grid.from, 'grid');
+  assert.equal(grid.to, 'house');
+  assert.notEqual(grid.from, 'hub');
+  assert.notEqual(grid.to, 'hub');
+});
+
+test('buildEdges markiert Netzbezug als inaktiv, wenn PV/Speicher genuegen', () => {
+  const edges = buildEdges({ pv1: 100, pv2: 0, batteryWatt: 0, batteryMagnitude: 0, charging: false, house: 20, gridConsumption: 0 });
+  const grid = edges.find((e) => e.id === 'grid');
+  assert.equal(grid.watt, 0);
+  assert.equal(grid.active, false);
+});
+
+test('buildEdges markiert Netzbezug als aktiv, wenn das Balkonkraftwerk den Bedarf nicht deckt', () => {
+  // Realer Fall (2026-07-27, siehe CHANGELOG): WR liefert 0 W ans Hausnetz,
+  // Smart Plugs verbrauchen dennoch ~58 W -> aus dem Netz gedeckt.
+  const edges = buildEdges({ pv1: 30, pv2: 30, batteryWatt: -60, batteryMagnitude: 60, charging: true, house: 0, gridConsumption: 67 });
+  const grid = edges.find((e) => e.id === 'grid');
+  assert.equal(grid.watt, 67);
+  assert.equal(grid.active, true);
+});
+
+test('buildEdges behandelt fehlenden gridConsumption-Wert als 0', () => {
+  const edges = buildEdges({ pv1: 0, pv2: 0, batteryWatt: 0, batteryMagnitude: 0, charging: false, house: 0 });
+  const grid = edges.find((e) => e.id === 'grid');
+  assert.equal(grid.watt, 0);
+  assert.equal(grid.active, false);
 });
