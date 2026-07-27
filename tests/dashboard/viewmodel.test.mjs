@@ -166,8 +166,19 @@ test('buildViewModel kommt ohne Smart-Plug-Daten aus', () => {
   const vm = buildViewModel(ROWS, [], initialState(), NOW);
   assert.equal(vm.plugs.groups.length, 0);
   assert.equal(vm.plugs.summary.count, 0);
+  assert.equal(vm.plugs.cumulativeSummary.count, 0);
   const rest = vm.houseBreakdown.items.find((i) => i.kind === 'unassigned');
   assert.equal(rest.name, 'Steckdosen gesamt');
+});
+
+test('vm.plugs.cumulative liefert die kumulierte Energie je Plug fuer Tab 02', () => {
+  // Kuehlschrank laeuft konstant mit 6 W ueber 59 Intervalle a 1/30 h
+  // (dieselbe Rechnung wie fuer die Hausnetz-Aufschluesselung im Σ-Modus).
+  const vm = buildViewModel(ROWS, PLUG_ROWS, initialState(), NOW);
+  const kuehlschrank = vm.plugs.cumulative.find((p) => p.plug_name === 'Kuehlschrank');
+  assert.ok(Math.abs(kuehlschrank.watts - 6 * 59 * (1 / 30)) < 1e-9);
+  assert.ok(Math.abs(vm.plugs.cumulativeSummary.totalWh - kuehlschrank.watts - vm.plugs.cumulative
+    .find((p) => p.plug_name === 'Router').watts) < 1e-9);
 });
 
 test('buildViewModel liefert Datenqualitaet und Aktualitaet mit', () => {

@@ -16,6 +16,7 @@ import {
 } from './energy.mjs';
 import {
   groupPlugs, plugSummary, latestPlugMeasurements, cumulativePlugMeasurements,
+  cumulativePlugSummary,
 } from './plugs.mjs';
 
 /** Anfangszustand: heute, Leistungsübersicht zuerst, Live-Momentaufnahme. */
@@ -97,7 +98,16 @@ export function buildViewModel(allRows, allPlugRows, state, now = new Date()) {
     // nicht, dass beide Richtungen vorkamen.
     battery: batteryFlows(filtered),
     houseBreakdown: flow ? houseBreakdown(flow, flowPlugs) : null,
-    plugs: { groups: plugGroups, summary: plugSummary(plugGroups), latest: latestPlugs },
+    plugs: {
+      groups: plugGroups,
+      summary: plugSummary(plugGroups),
+      latest: latestPlugs,
+      // Σ-Zeitraum-Pendant fuer Tab 02: kumulierte Energie je Plug ueber den
+      // Filter, dieselbe Grundlage wie flowPlugs im Σ-Modus der Leistungs-
+      // uebersicht (rechnet auf den ROH-Zeilen, s. cumulativePlugMeasurements()).
+      cumulative: cumulativePlugs,
+      cumulativeSummary: cumulativePlugSummary(cumulativePlugs),
+    },
     quality: dataQuality(display, isAllZero),
     freshness: dataFreshness(allRows, now),
   };
