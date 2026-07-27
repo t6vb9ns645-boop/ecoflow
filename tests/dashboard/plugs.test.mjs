@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   PLUG_PALETTE, hashString, plugColor, groupPlugs, plugSummary, latestPlugMeasurements,
+  cumulativePlugMeasurements,
 } from '../../docs/dashboard/lib/plugs.mjs';
 
 test('hashString ist deterministisch und unterscheidet Eingaben', () => {
@@ -89,4 +90,42 @@ test('latestPlugMeasurements liefert je Plug den letzten Messwert mit Farbe', ()
   const a = latest.find((p) => p.plug_sn === 'A');
   assert.equal(a.watts, 18);
   assert.equal(a.color, plugColor('A'));
+});
+
+/* ── Kumulierte Energie je Plug (Σ-Zeitraum-Modus) ──────────────────────── */
+
+test('cumulativePlugMeasurements integriert die Energie je Plug zeitgewichtet', () => {
+  // Kuehlschrank: ein Intervall 10:00 -> 10:02 (1/30 h), Linksregel haelt
+  // den frueheren Wert (6 W) ueber das Intervall -> 6 * 1/30 = 0.2 Wh.
+  const cum = cumulativePlugMeasurements(groupPlugs(PLUG_ROWS));
+  const a = cum.find((p) => p.plug_sn === 'A');
+  assert.ok(Math.abs(a.watts - 6 * (1 / 30)) < 1e-9);
+});
+
+test('cumulativePlugMeasurements traegt Name und Farbe wie latestPlugMeasurements', () => {
+  const cum = cumulativePlugMeasurements(groupPlugs(PLUG_ROWS));
+  const a = cum.find((p) => p.plug_sn === 'A');
+  assert.equal(a.plug_name, 'Kuehlschrank');
+  assert.equal(a.color, plugColor('A'));
+});
+
+test('cumulativePlugMeasurements ist 0 bei nur einer Messung im Zeitraum', () => {
+  const cum = cumulativePlugMeasurements(groupPlugs([
+    { t: '2026-07-26T10:00:00', plug_sn: 'B', plug_name: 'Router', watts: 3, switch_sta: 0 },
+  ]));
+  assert.equal(cum[0].watts, 0);
+});
+
+test('cumulativePlugMeasurements summiert ueber mehrere Intervalle', () => {
+  const cum = cumulativePlugMeasurements(groupPlugs([
+    { t: '2026-07-26T10:00:00', plug_sn: 'A', plug_name: 'Kuehlschrank', watts: 30, switch_sta: 1 },
+    { t: '2026-07-26T10:02:00', plug_sn: 'A', plug_name: 'Kuehlschrank', watts: 30, switch_sta: 1 },
+    { t: '2026-07-26T10:04:00', plug_sn: 'A', plug_name: 'Kuehlschrank', watts: 0, switch_sta: 0 },
+  ]));
+  // 30 W ueber 2x 2 Min = 2 Wh.
+  assert.ok(Math.abs(cum[0].watts - 2) < 1e-9);
+});
+
+test('cumulativePlugMeasurements liefert bei leerer Eingabe eine leere Liste', () => {
+  assert.deepEqual(cumulativePlugMeasurements([]), []);
 });

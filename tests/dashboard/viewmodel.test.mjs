@@ -93,18 +93,51 @@ test('die Energie-Kennzahlen sind unabhaengig vom aktiven Tab', () => {
 test('der Ansichtsmodus aendert nur das Flussmodell, nicht die Kennzahlen', () => {
   const base = initialState();
   const live = buildViewModel(ROWS, PLUG_ROWS, { ...base, flowMode: 'live' }, NOW);
-  const avg = buildViewModel(ROWS, PLUG_ROWS, { ...base, flowMode: 'period' }, NOW);
-  assert.deepEqual(live.energy, avg.energy);
-  // Live zeigt die letzte Messung (PV aus), Ø den Zeitraumschnitt (PV > 0).
+  const cumulative = buildViewModel(ROWS, PLUG_ROWS, { ...base, flowMode: 'period' }, NOW);
+  assert.deepEqual(live.energy, cumulative.energy);
+  // Live zeigt die letzte Messung (PV aus), Σ die ueber den Zeitraum
+  // kumulierte Energie (PV war 30 Messwerte lang an -> > 0 Wh).
   assert.equal(live.flow.pvTotal, 0);
-  assert.ok(avg.flow.pvTotal > 0);
+  assert.ok(cumulative.flow.pvTotal > 0);
 });
 
-test('der Ø-Modus mittelt die Batterieleistung vorzeichenrichtig', () => {
+test('der Σ-Modus kumuliert die Batterieleistung vorzeichenrichtig zu Energie (Wh)', () => {
   const vm = buildViewModel(ROWS, PLUG_ROWS, { ...initialState(), flowMode: 'period' }, NOW);
-  // 30x -150 W (laden) und 30x +40 W (entladen) -> Mittel -55 W, also ladend.
-  assert.ok(Math.abs(vm.flow.batteryWatt - (-55)) < 1e-9);
+  // 30x -150 W (laden, Linksregel haelt den 30. Wert ueber das 30. Intervall)
+  // -> 30 Intervalle laden, 29 Intervalle entladen mit +40 W, je 1/30 h.
+  const h = 1 / 30;
+  const chargeWh = 30 * 150 * h;
+  const dischargeWh = 29 * 40 * h;
+  assert.ok(Math.abs(vm.flow.chargeWh - chargeWh) < 1e-9);
+  assert.ok(Math.abs(vm.flow.dischargeWh - dischargeWh) < 1e-9);
+  assert.ok(Math.abs(vm.flow.batteryWatt - (dischargeWh - chargeWh)) < 1e-9);
   assert.equal(vm.flow.charging, true);
+});
+
+test('der Σ-Modus zeigt kumulierte Energie statt eines Leistungsmittelwerts', () => {
+  const vm = buildViewModel(ROWS, PLUG_ROWS, { ...initialState(), flowMode: 'period' }, NOW);
+  // PV lief 30 Messwerte lang mit 200 W (100+100) -> 30 Intervalle * 200 W * 1/30 h = 200 Wh.
+  assert.ok(Math.abs(vm.flow.pvTotal - 200) < 1e-9);
+  assert.ok(Math.abs(vm.flow.pv1 - 100) < 1e-9);
+  assert.ok(Math.abs(vm.flow.pv2 - 100) < 1e-9);
+});
+
+test('der Σ-Modus zeigt den letzten bekannten Ladezustand statt eines Mittelwerts', () => {
+  const vm = buildViewModel(ROWS, PLUG_ROWS, { ...initialState(), flowMode: 'period' }, NOW);
+  assert.equal(vm.flow.soc, 60);
+});
+
+test('die Plug-Aufschluesselung ist im Σ-Modus kumulierte Energie je Plug', () => {
+  const vm = buildViewModel(ROWS, PLUG_ROWS, { ...initialState(), flowMode: 'period' }, NOW);
+  const kuehlschrank = vm.houseBreakdown.items.find((i) => i.name === 'Kuehlschrank');
+  // Kuehlschrank laeuft konstant mit 6 W ueber 59 Intervalle a 1/30 h.
+  assert.ok(Math.abs(kuehlschrank.watts - 6 * 59 * (1 / 30)) < 1e-9);
+});
+
+test('die Plug-Aufschluesselung zeigt im Live-Modus weiterhin die letzte Messung', () => {
+  const vm = buildViewModel(ROWS, PLUG_ROWS, initialState(), NOW);
+  const kuehlschrank = vm.houseBreakdown.items.find((i) => i.name === 'Kuehlschrank');
+  assert.equal(kuehlschrank.watts, 6);
 });
 
 test('die Energie rechnet auf Rohdaten, auch wenn die Anzeige aggregiert', () => {

@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {
   isCharging, chargePower, dischargePower, batteryState,
   pvTotal, houseLoad, feedInPower, calcEnergyWh, cumulativeEnergyWh,
-  energyTotals, flowModel, houseBreakdown, houseTotalWatt, batteryFlows, MAX_GAP_HOURS,
+  energyTotals, flowModel, flowCumulative, houseBreakdown, houseTotalWatt, batteryFlows, MAX_GAP_HOURS,
 } from '../../docs/dashboard/lib/energy.mjs';
 
 /* ── Vorzeichenkonvention (CHANGELOG [3.2.2]) ───────────────────────────── */
@@ -193,6 +193,110 @@ test('flowModel bildet den Entladefall korrekt ab', () => {
 
 test('flowModel klemmt negativen Netzverbrauch auf 0', () => {
   assert.equal(flowModel({ ...LIVE_ROW, grid_cons_watt: -5 }).gridConsumption, 0);
+});
+
+/* ── Kumuliertes Flussmodell (Σ-Zeitraum-Modus) ─────────────────────────── */
+
+const H = 1 / 30; // 2 Minuten in Stunden
+
+function periodRows(specs) {
+  // specs: [t, pv1, pv2, ac_house, batt, toPlugs, base, grid, soc]
+  return specs.map(([t, pv1, pv2, house, batt, toPlugs, base, grid, soc]) => ({
+    t, pv1_watt: pv1, pv2_watt: pv2, ac_house_watt: house, battery_power_watt: batt,
+    inv_to_plug_watt: toPlugs, permanent_watt: base, grid_cons_watt: grid, battery_soc_percent: soc,
+  }));
+}
+
+test('flowCumulative summiert PV zeitgewichtet statt zu mitteln', () => {
+  // 3 Zeilen -> 2 Intervalle, Linksregel haelt je den frueheren Wert:
+  // Intervall 1 mit 100 W, Intervall 2 mit 300 W (der letzte Messwert 0 W
+  // startet kein weiteres Intervall mehr).
+  const rows = periodRows([
+    ['2026-07-25T12:00:00Z', 100, 100, 0, 0, 0, 0, 0, 50],
+    ['2026-07-25T12:02:00Z', 300, 300, 0, 0, 0, 0, 0, 50],
+    ['2026-07-25T12:04:00Z', 0, 0, 0, 0, 0, 0, 0, 50],
+  ]);
+  const f = flowCumulative(rows);
+  assert.ok(Math.abs(f.pv1 - (100 + 300) * H) < 1e-9);
+  assert.ok(Math.abs(f.pv2 - (100 + 300) * H) < 1e-9);
+  assert.ok(Math.abs(f.pvTotal - (200 + 600) * H) < 1e-9);
+});
+
+test('flowCumulative trennt Lade- und Entladeenergie und bildet das Netto', () => {
+  // 5 Zeilen -> 4 Intervalle. Die Linksregel haelt je den FRUEHEREN Wert:
+  // Intervalle 1+2 laden mit -100 W, Intervalle 3+4 entladen mit 40 W
+  // (der letzte Messwert selbst startet kein weiteres Intervall mehr).
+  const rows = periodRows([
+    ['2026-07-25T12:00:00Z', 0, 0, 0, -100, 0, 0, 0, 50],
+    ['2026-07-25T12:02:00Z', 0, 0, 0, -100, 0, 0, 0, 50],
+    ['2026-07-25T12:04:00Z', 0, 0, 0, 40, 0, 0, 0, 50],
+    ['2026-07-25T12:06:00Z', 0, 0, 0, 40, 0, 0, 0, 50],
+    ['2026-07-25T12:08:00Z', 0, 0, 0, 40, 0, 0, 0, 50],
+  ]);
+  const f = flowCumulative(rows);
+  assert.ok(Math.abs(f.chargeWh - 2 * 100 * H) < 1e-9);
+  assert.ok(Math.abs(f.dischargeWh - 2 * 40 * H) < 1e-9);
+  assert.ok(Math.abs(f.batteryWatt - (2 * 40 * H - 2 * 100 * H)) < 1e-9);
+  assert.equal(f.charging, true);
+  assert.equal(f.batteryState, 'lädt');
+});
+
+test('flowCumulative zeigt den letzten bekannten Ladezustand, nicht den Mittelwert', () => {
+  const rows = periodRows([
+    ['2026-07-25T12:00:00Z', 0, 0, 0, 0, 0, 0, 0, 40],
+    ['2026-07-25T12:02:00Z', 0, 0, 0, 0, 0, 0, 0, 80],
+  ]);
+  assert.equal(flowCumulative(rows).soc, 80);
+});
+
+test('flowCumulative ignoriert einen fehlenden SOC-Wert am Ende und faellt auf den letzten gueltigen zurueck', () => {
+  const rows = periodRows([
+    ['2026-07-25T12:00:00Z', 0, 0, 0, 0, 0, 0, 0, 40],
+    ['2026-07-25T12:02:00Z', 0, 0, 0, 0, 0, 0, 0, NaN],
+  ]);
+  assert.equal(flowCumulative(rows).soc, 40);
+});
+
+test('flowCumulative kumuliert Hausnetz-Teilstroeme und Netzbezug getrennt', () => {
+  const rows = periodRows([
+    ['2026-07-25T12:00:00Z', 0, 0, 60, 0, 20, 10, 30, 50],
+    ['2026-07-25T12:02:00Z', 0, 0, 60, 0, 20, 10, 30, 50],
+  ]);
+  const f = flowCumulative(rows);
+  assert.ok(Math.abs(f.house - 60 * H) < 1e-9);
+  assert.ok(Math.abs(f.toPlugs - 20 * H) < 1e-9);
+  assert.ok(Math.abs(f.baseLoad - 10 * H) < 1e-9);
+  assert.ok(Math.abs(f.gridConsumption - 30 * H) < 1e-9);
+});
+
+test('flowCumulative klemmt negativen Netzverbrauch auf 0', () => {
+  const rows = periodRows([
+    ['2026-07-25T12:00:00Z', 0, 0, 0, 0, 0, 0, -5, 50],
+    ['2026-07-25T12:02:00Z', 0, 0, 0, 0, 0, 0, -5, 50],
+  ]);
+  assert.equal(flowCumulative(rows).gridConsumption, 0);
+});
+
+test('flowCumulative ist bei leeren/einzelnen Zeilen ueberall 0 bzw. 0 SOC', () => {
+  assert.deepEqual(flowCumulative([]).soc, 0);
+  const f = flowCumulative(periodRows([['2026-07-25T12:00:00Z', 100, 100, 0, 0, 0, 0, 0, 0]]));
+  assert.equal(f.pvTotal, 0);
+  assert.equal(f.chargeWh, 0);
+  assert.equal(f.dischargeWh, 0);
+});
+
+test('houseBreakdown funktioniert unveraendert mit einem kumulierten (Wh-)Flussmodell', () => {
+  const rows = periodRows([
+    ['2026-07-25T12:00:00Z', 0, 0, 60, 0, 20, 10, 0, 50],
+    ['2026-07-25T12:02:00Z', 0, 0, 60, 0, 20, 10, 0, 50],
+  ]);
+  const f = flowCumulative(rows);
+  const plugsWh = [{ plug_sn: 'A', plug_name: 'Kuehlschrank', watts: 20 * H }];
+  const b = houseBreakdown(f, plugsWh);
+  const plug = b.items.find((i) => i.kind === 'plug');
+  assert.ok(Math.abs(plug.watts - 20 * H) < 1e-9);
+  const base = b.items.find((i) => i.kind === 'base');
+  assert.ok(Math.abs(base.watts - 10 * H) < 1e-9);
 });
 
 /* ── Vorzeichen an echten Messpunkten (beide Richtungen) ────────────────── */

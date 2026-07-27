@@ -9,10 +9,14 @@
 import { isAllZero } from './csv.mjs';
 import {
   presetRange, filterRows, pickGranularity, aggregateRows, aggregatePlugRows,
-  averageRow, dataQuality, dataFreshness, PRESET_LABELS,
+  dataQuality, dataFreshness, PRESET_LABELS,
 } from './filters.mjs';
-import { energyTotals, flowModel, houseBreakdown, batteryFlows } from './energy.mjs';
-import { groupPlugs, plugSummary, latestPlugMeasurements } from './plugs.mjs';
+import {
+  energyTotals, flowModel, flowCumulative, houseBreakdown, batteryFlows,
+} from './energy.mjs';
+import {
+  groupPlugs, plugSummary, latestPlugMeasurements, cumulativePlugMeasurements,
+} from './plugs.mjs';
 
 /** Anfangszustand: heute, Leistungsübersicht zuerst, Live-Momentaufnahme. */
 export function initialState() {
@@ -60,14 +64,22 @@ export function buildViewModel(allRows, allPlugRows, state, now = new Date()) {
 
   const empty = filtered.length === 0;
   const lastRow = empty ? null : filtered[filtered.length - 1];
-  const avgRow = averageRow(filtered);
 
+  // `plugGroups`/`latestPlugs` basieren auf den (ggf. aggregierten) Anzeige-
+  // zeilen und dienen Tab 02 sowie dem Live-Modus der Leistungsübersicht.
   const plugGroups = groupPlugs(displayPlugs);
   const latestPlugs = latestPlugMeasurements(plugGroups);
+  // Für die kumulierte Energie je Plug werden dagegen die ROH-Zeilen
+  // gebraucht (zeitgewichtete Integration, s. calcEnergyWh()).
+  const rawPlugGroups = groupPlugs(filteredPlugs);
+  const cumulativePlugs = cumulativePlugMeasurements(rawPlugGroups);
 
-  // Live-Modus zeigt die letzte Messung, Ø-Modus den Zeitraum-Durchschnitt.
-  const flowSource = state.flowMode === 'live' ? lastRow : avgRow;
-  const flow = flowSource ? flowModel(flowSource) : null;
+  // Live-Modus zeigt die letzte Messung (W), Σ-Modus die über den gesamten
+  // Zeitraum kumulierte Energie (Wh) — beide rechnen auf den Rohzeilen.
+  const flow = state.flowMode === 'live'
+    ? (lastRow ? flowModel(lastRow) : null)
+    : (empty ? null : flowCumulative(filtered));
+  const flowPlugs = state.flowMode === 'live' ? latestPlugs : cumulativePlugs;
 
   return {
     range: { from, to },
@@ -77,15 +89,14 @@ export function buildViewModel(allRows, allPlugRows, state, now = new Date()) {
     display,
     displayPlugs,
     lastRow,
-    averageRow: avgRow,
     rangeLabel: describeRange(state, now),
     presetLabel: PRESET_LABELS[state.preset] || 'Zeitraum',
     energy: energyTotals(filtered),
     flow,
-    // Lade-/Entladeanteil getrennt — im Ø-Modus zeigt der Netto-Pfeil allein
+    // Lade-/Entladeanteil getrennt — im Σ-Modus zeigt der Netto-Pfeil allein
     // nicht, dass beide Richtungen vorkamen.
     battery: batteryFlows(filtered),
-    houseBreakdown: flow ? houseBreakdown(flow, latestPlugs) : null,
+    houseBreakdown: flow ? houseBreakdown(flow, flowPlugs) : null,
     plugs: { groups: plugGroups, summary: plugSummary(plugGroups), latest: latestPlugs },
     quality: dataQuality(display, isAllZero),
     freshness: dataFreshness(allRows, now),
