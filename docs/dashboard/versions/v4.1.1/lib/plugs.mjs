@@ -79,9 +79,3 @@ export function cumulativePlugMeasurements(groups) {
     color: g.color,
   }));
 }
-
-/** Kennzahlen ueber alle Plugs im Σ-Zeitraum-Modus (kumulierte Energie, Wh). */
-export function cumulativePlugSummary(cumulativePlugs) {
-  const totalWh = cumulativePlugs.reduce((s, p) => s + (Number(p.watts) || 0), 0);
-  return { totalWh, count: cumulativePlugs.length };
-}

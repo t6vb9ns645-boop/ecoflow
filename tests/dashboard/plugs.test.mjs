@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   PLUG_PALETTE, hashString, plugColor, groupPlugs, plugSummary, latestPlugMeasurements,
-  cumulativePlugMeasurements,
+  cumulativePlugMeasurements, cumulativePlugSummary,
 } from '../../docs/dashboard/lib/plugs.mjs';
 
 test('hashString ist deterministisch und unterscheidet Eingaben', () => {
@@ -128,4 +128,18 @@ test('cumulativePlugMeasurements summiert ueber mehrere Intervalle', () => {
 
 test('cumulativePlugMeasurements liefert bei leerer Eingabe eine leere Liste', () => {
   assert.deepEqual(cumulativePlugMeasurements([]), []);
+});
+
+/* ── Kennzahlen ueber alle Plugs im Σ-Zeitraum-Modus ────────────────────── */
+
+test('cumulativePlugSummary summiert die kumulierte Energie aller Plugs', () => {
+  const cum = cumulativePlugMeasurements(groupPlugs(PLUG_ROWS));
+  const s = cumulativePlugSummary(cum);
+  assert.equal(s.count, 2);
+  // Router hat nur eine Messung im Zeitraum -> 0 Wh; Kuehlschrank 6 W * 1/30 h.
+  assert.ok(Math.abs(s.totalWh - 6 * (1 / 30)) < 1e-9);
+});
+
+test('cumulativePlugSummary ist ohne Plugs bei null', () => {
+  assert.deepEqual(cumulativePlugSummary([]), { totalWh: 0, count: 0 });
 });
