@@ -178,6 +178,15 @@ export function flowModel(row) {
  *
  * - `unassigned`: Steckdosenleistung, die keinem konfigurierten Plug zugeordnet ist
  * - `residual`:   Rest zwischen AC-Hausverbrauch und den erfassten Teilströmen
+ * - `grid`:       Anteil, den das Balkonkraftwerk (PV/Speicher) nicht decken konnte
+ *                 und der stattdessen aus dem Stromnetz bezogen wurde
+ *                 (`grid_cons_watt`, siehe CHANGELOG „Netzbezug im Hausnetz sichtbar").
+ *                 Die Smart Plugs messen ihren eigenen Verbrauch unabhängig vom
+ *                 Wechselrichter — reicht dessen Steckdosen-Ausgang (`toPlugs`)
+ *                 nicht aus, deckt der Rest der Plug-Summe (nicht `unassigned`,
+ *                 das nie negativ wird) faktisch schon Netzstrom ab; dieser Posten
+ *                 macht das zusätzlich explizit sichtbar, statt es unbenannt in der
+ *                 Steckdosensumme verschwinden zu lassen.
  */
 export function houseBreakdown(flow, plugs = []) {
   const plugSum = plugs.reduce((s, p) => s + num(p.watts), 0);
@@ -198,9 +207,29 @@ export function houseBreakdown(flow, plugs = []) {
   if (residual > 0) {
     items.push({ key: 'residual', name: 'Sonstiges / nicht erfasst', watts: residual, kind: 'residual' });
   }
+  if (flow.gridConsumption > 0) {
+    items.push({
+      key: 'grid',
+      name: 'Netzbezug (vom Balkonkraftwerk nicht gedeckt)',
+      watts: flow.gridConsumption,
+      kind: 'grid',
+    });
+  }
   const total = items.reduce((s, i) => s + i.watts, 0);
   return {
     items: items.map((i) => ({ ...i, share: total > 0 ? i.watts / total : 0 })),
     total,
   };
+}
+
+/**
+ * Gesamter Leistungsbedarf des Hausnetzes aus BEIDEN Quellen: was der
+ * Wechselrichter liefert (`flow.house`, aus PV/Speicher) PLUS was zusätzlich
+ * aus dem Stromnetz bezogen wird (`flow.gridConsumption`), weil das
+ * Balkonkraftwerk den Bedarf (z. B. der Smart Plugs) allein nicht deckt.
+ * Beide Werte stammen aus unabhängigen Messungen (Wechselrichter- bzw.
+ * Netz-Sensor) und werden hier lediglich addiert, nicht abgeglichen.
+ */
+export function houseTotalWatt(flow) {
+  return flow.house + flow.gridConsumption;
 }

@@ -1,15 +1,18 @@
 /**
  * Geometrie des Stromfluss-Diagramms (Hub-und-Speiche).
  *
- * Topologie — der Wechselrichter ist der EINZIGE zentrale Knoten:
+ * Topologie — der Wechselrichter ist der zentrale Knoten fürs Balkonkraftwerk,
+ * das Netz speist das Hausnetz aber DIREKT und unabhaengig davon:
  *     PV1 ─┐
  *          ├─> Wechselrichter <──> Speicher
  *     PV2 ─┘         │
  *                    v
- *                 Hausnetz
+ *     Netz ────> Hausnetz
  *
- * Der Speicher hängt ausschliesslich am Wechselrichter (nicht am Hausnetz),
- * und das Hausnetz wird ausschliesslich vom Wechselrichter gespeist.
+ * Der Speicher hängt ausschliesslich am Wechselrichter (nicht am Hausnetz).
+ * Das Hausnetz wird primär vom Wechselrichter versorgt, zusätzlich aber auch
+ * direkt aus dem Stromnetz — immer dann, wenn PV/Speicher den Bedarf (z. B.
+ * der Smart Plugs) nicht vollständig decken können (`grid_cons_watt`).
  *
  * Positionen sind Mittelpunkte in Pixeln relativ zum Container. Die Abstände
  * werden aus den TATSÄCHLICHEN halben Kantenlängen der Karten berechnet, damit
@@ -50,6 +53,10 @@ export function isEdgeActive(watt) {
  * Zwei Stufen — PV1/PV2 stehen in BEIDEN nebeneinander, nie übereinander:
  * gestapelte PV-Karten würden zwangsläufig eine Verbindungslinie durch die
  * jeweils andere Karte schicken.
+ *
+ * Der Netz-Knoten steht dem Speicher-Knoten symmetrisch gegenüber (gleicher
+ * Abstand zum Wechselrichter, gespiegelte Seite) — er speist aber, anders als
+ * der Speicher, nicht den Wechselrichter, sondern direkt das Hausnetz.
  */
 export function computeLayout(width) {
   const w = Number(width) || 0;
@@ -63,13 +70,14 @@ export function computeLayout(width) {
   const pv1 = { x: cx - pvGap, y: 50 };
   const pv2 = { x: cx + pvGap, y: 50 };
 
-  let hub, batt, height;
+  let hub, batt, grid, height;
   if (wide) {
     // Nebeneinander: Mindestabstand = beide Halbbreiten + Luftraum.
     const minGap = hubHalf + battHalfW + 34;
     const battGap = Math.max(minGap, Math.min(w * 0.34, 260));
     hub = { x: cx, y: 232 };
     batt = { x: cx + battGap, y: 232 };
+    grid = { x: cx - battGap, y: 232 };
     height = 380;
   } else {
     // Untereinander, aber seitlich versetzt: der Versatz muss grösser sein als
@@ -80,10 +88,11 @@ export function computeLayout(width) {
     const battGap = Math.max(clearFloor, Math.min(w * 0.22, 95, maxGap));
     hub = { x: cx, y: 205 };
     batt = { x: cx + battGap, y: hub.y + hubHalf + BATT_HALF_HEIGHT + 55 };
+    grid = { x: cx - battGap, y: batt.y };
     height = batt.y + BATT_HALF_HEIGHT + 40;
   }
 
-  return { tier: wide ? 'wide' : 'narrow', sizes, pv1, pv2, hub, batt, height, centerX: cx };
+  return { tier: wide ? 'wide' : 'narrow', sizes, pv1, pv2, hub, batt, grid, height, centerX: cx };
 }
 
 /**
@@ -134,9 +143,13 @@ export function edgeControlPoints(a, b) {
 }
 
 /**
- * Die drei Kanten des Diagramms mit Richtung und Aktivitätszustand.
+ * Die vier Kanten des Diagramms mit Richtung und Aktivitätszustand.
  * Die Speicher-Kante dreht ihre Richtung mit dem Vorzeichen:
  * lädt -> Wechselrichter zum Speicher, entlädt -> Speicher zum Wechselrichter.
+ *
+ * Die Netz-Kante ist die einzige, die nicht am Wechselrichter hängt — sie
+ * versorgt das Hausnetz direkt, wenn PV/Speicher den Bedarf nicht decken
+ * (`flow.gridConsumption`, Feld `grid_cons_watt`).
  */
 export function buildEdges(flow) {
   return [
@@ -151,5 +164,13 @@ export function buildEdges(flow) {
       color: 'battery',
     },
     { id: 'house', from: 'hub', to: 'house', watt: flow.house, active: isEdgeActive(flow.house), color: 'house' },
+    {
+      id: 'grid',
+      from: 'grid',
+      to: 'house',
+      watt: flow.gridConsumption || 0,
+      active: isEdgeActive(flow.gridConsumption || 0),
+      color: 'grid',
+    },
   ];
 }

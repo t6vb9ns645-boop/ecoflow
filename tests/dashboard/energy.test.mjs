@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {
   isCharging, chargePower, dischargePower, batteryState,
   pvTotal, houseLoad, feedInPower, calcEnergyWh, cumulativeEnergyWh,
-  energyTotals, flowModel, houseBreakdown, batteryFlows, MAX_GAP_HOURS,
+  energyTotals, flowModel, houseBreakdown, houseTotalWatt, batteryFlows, MAX_GAP_HOURS,
 } from '../../docs/dashboard/lib/energy.mjs';
 
 /* ── Vorzeichenkonvention (CHANGELOG [3.2.2]) ───────────────────────────── */
@@ -337,4 +337,45 @@ test('houseBreakdown ohne Verbrauch hat Anteil 0 statt Division durch 0', () => 
   const b = houseBreakdown(flow, []);
   assert.equal(b.total, 0);
   assert.ok(b.items.every((i) => i.share === 0));
+});
+
+/* ── Netzbezug im Hausnetz (Balkonkraftwerk deckt Bedarf nicht vollstaendig) ── */
+
+test('houseBreakdown zeigt keinen Netzbezug-Posten ohne Netzverbrauch', () => {
+  const flow = flowModel(LIVE_ROW); // grid_cons_watt: 0
+  const b = houseBreakdown(flow, []);
+  assert.equal(b.items.find((i) => i.kind === 'grid'), undefined);
+});
+
+test('houseBreakdown weist Netzbezug aus, wenn PV/Speicher den Bedarf nicht decken', () => {
+  // Realer Fall (2026-07-27): WR liefert 0 W ans Hausnetz (PV laedt komplett
+  // die Batterie), die Smart Plugs verbrauchen dennoch ~58 W -> aus dem Netz.
+  const row = {
+    ...LIVE_ROW, ac_house_watt: 0, inv_to_plug_watt: 0, permanent_watt: 10, grid_cons_watt: 67,
+  };
+  const flow = flowModel(row);
+  const plugs = [{ plug_sn: 'A', plug_name: 'Kuehlschrank', watts: 58 }];
+  const b = houseBreakdown(flow, plugs);
+  const grid = b.items.find((i) => i.kind === 'grid');
+  assert.ok(grid, 'Netzbezug-Posten fehlt');
+  assert.equal(grid.watts, 67);
+  assert.ok(b.total >= 67 + 58 + 10 - 1e-9, 'Netzbezug muss im Gesamttotal enthalten sein');
+});
+
+test('houseBreakdown-Anteile summieren sich mit Netzbezug weiterhin auf 1', () => {
+  const row = { ...LIVE_ROW, ac_house_watt: 0, inv_to_plug_watt: 0, grid_cons_watt: 67 };
+  const flow = flowModel(row);
+  const b = houseBreakdown(flow, [{ plug_sn: 'A', plug_name: 'K', watts: 58 }]);
+  const sum = b.items.reduce((s, i) => s + i.share, 0);
+  assert.ok(Math.abs(sum - 1) < 1e-9);
+});
+
+test('houseTotalWatt addiert Wechselrichter- und Netzanteil', () => {
+  const flow = flowModel({ ...LIVE_ROW, ac_house_watt: 19, grid_cons_watt: 67 });
+  assert.equal(houseTotalWatt(flow), 19 + 67);
+});
+
+test('houseTotalWatt ist ohne Netzbezug identisch zum Wechselrichter-Anteil', () => {
+  const flow = flowModel(LIVE_ROW); // grid_cons_watt: 0
+  assert.equal(houseTotalWatt(flow), flow.house);
 });
