@@ -142,6 +142,73 @@ class MigrateCsvIfNeededTests(unittest.TestCase):
         self.assertEqual(rows, [{"timestamp": "t1", "watts": "10"}])
 
 
+class FixSmartplugScaleIfNeededTests(unittest.TestCase):
+    FIELDS = ["timestamp", "plug_sn", "plug_name", "watts", "switch_sta", "volt", "current_a", "temp_c", "led_brightness"]
+
+    def setUp(self):
+        self.tmpdir = tempfile.TemporaryDirectory()
+        self.csv_file = os.path.join(self.tmpdir.name, "test.csv")
+
+    def tearDown(self):
+        self.tmpdir.cleanup()
+
+    def _write_csv(self, rows):
+        with open(self.csv_file, "w", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=self.FIELDS)
+            writer.writeheader()
+            writer.writerows(rows)
+
+    def _read_csv(self):
+        with open(self.csv_file, "r", newline="") as f:
+            return list(csv.DictReader(f))
+
+    def _row(self, volt, temp_c):
+        return {
+            "timestamp": "t1", "plug_sn": "A", "plug_name": "Kuehlschrank", "watts": "10",
+            "switch_sta": "1", "volt": volt, "current_a": "0.5", "temp_c": temp_c, "led_brightness": "511",
+        }
+
+    def test_noop_when_file_does_not_exist(self):
+        tracker.fix_smartplug_scale_if_needed(self.csv_file)
+        self.assertFalse(os.path.exists(self.csv_file))
+
+    def test_corrects_rows_with_implausibly_low_volt(self):
+        self._write_csv([self._row("23.5", "3.4")])
+        tracker.fix_smartplug_scale_if_needed(self.csv_file)
+        rows = self._read_csv()
+        self.assertEqual(rows[0]["volt"], "235.0")
+        self.assertEqual(rows[0]["temp_c"], "34.0")
+
+    def test_leaves_already_correct_rows_untouched(self):
+        self._write_csv([self._row("235.0", "34.0")])
+        mtime_before = os.path.getmtime(self.csv_file)
+        tracker.fix_smartplug_scale_if_needed(self.csv_file)
+        self.assertEqual(os.path.getmtime(self.csv_file), mtime_before)
+
+    def test_is_idempotent_across_repeated_runs(self):
+        self._write_csv([self._row("23.5", "3.4")])
+        tracker.fix_smartplug_scale_if_needed(self.csv_file)
+        tracker.fix_smartplug_scale_if_needed(self.csv_file)
+        rows = self._read_csv()
+        self.assertEqual(rows[0]["volt"], "235.0")
+
+    def test_handles_mixed_old_and_new_rows_in_the_same_file(self):
+        # Simuliert die reale Situation: Zeilen mit altem Code (klein) neben
+        # bereits nach dem Fix geschriebenen Zeilen (korrekt) im selben Lauf.
+        self._write_csv([self._row("23.5", "3.4"), self._row("236.0", "33.0")])
+        tracker.fix_smartplug_scale_if_needed(self.csv_file)
+        rows = self._read_csv()
+        self.assertEqual(rows[0]["volt"], "235.0")
+        self.assertEqual(rows[1]["volt"], "236.0")
+
+    def test_ignores_zero_and_empty_volt(self):
+        self._write_csv([self._row("0", "0"), self._row("", "")])
+        tracker.fix_smartplug_scale_if_needed(self.csv_file)
+        rows = self._read_csv()
+        self.assertEqual(rows[0]["volt"], "0")
+        self.assertEqual(rows[1]["volt"], "")
+
+
 class AppendRowsToCsvTests(unittest.TestCase):
     def setUp(self):
         self.tmpdir = tempfile.TemporaryDirectory()
