@@ -14,8 +14,8 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
+/lib/
+/lib64/
 parts/
 sdist/
 var/
@@ -50,3 +50,4 @@ secrets.json
 # HINWEIS: Deine API-Keys gehören NICHT in dieses Repository!
 # Sie sind GitHub Secrets, nicht in Code/Dateien!
 # ============================================================================
+node_modules/

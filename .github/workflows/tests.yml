@@ -1,0 +1,46 @@
+name: Tests
+
+on:
+  push:
+    branches: [main, 'claude/**']
+    paths-ignore:
+      - 'docs/ecoflow_energie_daten.csv'
+      - 'docs/ecoflow_smartplugs_daten.csv'
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dashboard:
+    name: Dashboard-Module (Node)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Der eingebaute Test-Runner mit Coverage-Schwellen braucht >= 22.8.
+          node-version: '22'
+
+      # Keine Dependencies: Tests laufen mit dem Node-eigenen Runner.
+      - name: Tests mit Coverage-Schwelle (>= 85 %)
+        run: npm run test:coverage
+
+  collector:
+    name: Collector (Python)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Abhaengigkeiten installieren
+        run: pip install -r requirements.txt
+
+      - name: Unit-Tests
+        run: python -m unittest discover -s tests -v

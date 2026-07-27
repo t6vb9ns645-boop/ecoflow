@@ -1,11 +1,16 @@
 name: Auto PR & Merge (Claude Branches)
 
+# Ablauf: Ein Push auf claude/** eroeffnet einen Entwurf (Draft-PR). Entwuerfe
+# werden NICHT automatisch gemergt — so bleibt die Freigabe beim Menschen.
+# Sobald der PR ueber "Ready for review" aus dem Entwurfsstatus geholt wird,
+# greift der bisherige Automatismus und merged ihn.
+
 on:
   push:
     branches:
       - 'claude/**'
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, ready_for_review]
     branches: [main]
 
 permissions:
@@ -34,18 +39,23 @@ jobs:
             gh pr create \
               --repo "${{ github.repository }}" \
               --title "auto: ${BRANCH}" \
-              --body "Automatisch erstellter PR von Branch \`${BRANCH}\`." \
+              --body "Automatisch erstellter Entwurf von Branch \`${BRANCH}\`. Zum Mergen auf \"Ready for review\" setzen." \
               --base main \
-              --head "$BRANCH"
-            echo "PR erstellt fuer Branch ${BRANCH}"
+              --head "$BRANCH" \
+              --draft
+            echo "Draft-PR erstellt fuer Branch ${BRANCH}"
           else
             echo "PR #${existing} existiert bereits"
           fi
 
-  # Wird bei PR-Event ausgelöst: merged automatisch wenn Quell-Branch claude/** ist
+  # Wird bei PR-Event ausgelöst: merged automatisch wenn Quell-Branch claude/**
+  # ist UND der PR kein Entwurf mehr ist.
   auto-merge:
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request' && startsWith(github.head_ref, 'claude/')
+    if: >-
+      github.event_name == 'pull_request' &&
+      startsWith(github.head_ref, 'claude/') &&
+      github.event.pull_request.draft == false
     steps:
       - name: PR mergen
         env:
