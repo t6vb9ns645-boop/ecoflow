@@ -9,6 +9,47 @@ die Versionierung folgt grob [Semantic Versioning](https://semver.org/lang/de/).
 
 ---
 
+## [4.2.1] — 2026-07-27
+
+### Fixed
+- **PV-Überschuss, der ins öffentliche Netz eingespeist wird, zählte fälschlich
+  als Hausnetz-Verbrauch**: Die „Hausnetz — Gesamtverbrauch"-Aufschlüsselung
+  (Tab 01, Leistungsfluss) bildete die Lücke zwischen dem gemessenen
+  Wechselrichter-Ausgang (`ac_house_watt`) und den erfassten Teilströmen
+  (Smart Plugs + Grundbedarf) vollständig als Posten „Sonstiges / nicht
+  erfasst" ab — also als (unbekannten) Verbraucher im Haus. Tatsächlich
+  entsteht diese Lücke typischerweise, wenn die Smart Plugs wenig
+  verbrauchen UND der Speicher voll ist (nicht mehr lädt): Der
+  Wechselrichter gibt dann weiterhin die volle PV-Leistung aus, die vom
+  Haus nicht abgenommene Restleistung fließt aber ins öffentliche Netz statt
+  irgendwo im Haus verbraucht zu werden. Betraf reale Messwerte im
+  Datensatz (z. B. 25.07. 19:20 Uhr: 107 W Wechselrichter-Ausgang bei nur
+  84 W erfasstem Verbrauch und vollem, nicht ladendem Speicher).
+- Die bereits vorhandene, unabhängig aus PV/Speicher/Hausverbrauch berechnete
+  Einspeise-Schätzung (`feedInPower()`, bisher nur für die Energie-Kennzahl
+  „Einspeisung" in Sektion 02 genutzt) wird jetzt auch in der
+  Leistungsfluss-Aufschlüsselung berücksichtigt: Der dadurch erklärte Anteil
+  der Lücke zählt nicht mehr zum Hausnetz-Verbrauch (weder im Gesamtwert
+  noch im „Sonstiges / nicht erfasst"-Posten). Ein durch Einspeisung nicht
+  erklärter Rest bleibt weiterhin als „Sonstiges / nicht erfasst" sichtbar.
+  Ein neuer Hinweistext unter „Hausnetz — Gesamtverbrauch" macht die
+  ausgeschlossene Einspeisemenge transparent, sobald sie auftritt. Gilt für
+  Live- und Σ-Zeitraum-Modus sowie jeden gewählten Zeitraum-Filter
+  gleichermaßen.
+
+### Added
+- `flowModel()`/`flowCumulative()` liefern jetzt zusätzlich `feedIn`
+  (W bzw. Wh, dieselbe Berechnung wie `feedInPower()`/`energyTotals()`).
+- `houseBreakdown()` gibt zusätzlich `feedIn` zurück (die vom Hausnetz-Total
+  ausgeschlossene Einspeisemenge).
+- 7 neue Tests (`energy.test.mjs`) für die Reklassifizierung, inkl.
+  Regressionsfall ohne Einspeisung und Σ-Zeitraum-Fall.
+
+### Rückwärtskompatibilität
+- **Ohne Einspeisung unverändert**: Ist `feedInPower()` 0 (z. B. weil der
+  Speicher den gesamten PV-Überschuss lädt), bleiben Aufschlüsselung und
+  Gesamtverbrauch exakt wie zuvor — bestehende Tests dafür bleiben grün.
+
 ## [4.2.0] — 2026-07-27
 
 ### Added

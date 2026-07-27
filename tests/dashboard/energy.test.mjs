@@ -483,3 +483,81 @@ test('houseTotalWatt ist ohne Netzbezug identisch zum Wechselrichter-Anteil', ()
   const flow = flowModel(LIVE_ROW); // grid_cons_watt: 0
   assert.equal(houseTotalWatt(flow), flow.house);
 });
+
+/* ── Netzeinspeisung darf nicht als Hausnetz-Verbrauch gefuehrt werden ──── */
+
+test('flowModel enthaelt die berechnete Netzeinspeisung', () => {
+  const row = { pv1_watt: 300, pv2_watt: 300, inv_to_plug_watt: 50, permanent_watt: 10, battery_power_watt: -100 };
+  assert.equal(flowModel(row).feedIn, 440);
+});
+
+test('flowCumulative kumuliert die Netzeinspeisung zeitgewichtet', () => {
+  const rows = periodRows([
+    ['2026-07-25T12:00:00Z', 200, 200, 0, 0, 30, 10, 0, 50],
+    ['2026-07-25T12:02:00Z', 200, 200, 0, 0, 30, 10, 0, 50],
+  ]);
+  // PV 400 W, Haus 40 W, keine Ladung -> 360 W Ueberschuss ueber 1 Intervall (H).
+  assert.ok(Math.abs(flowCumulative(rows).feedIn - 360 * H) < 1e-9);
+});
+
+test('houseBreakdown zaehlt vollstaendig durch Einspeisung erklaerte Luecke nicht als Sonstiges', () => {
+  // Smart Plugs verbrauchen wenig (30+10 W), Speicher voll (laedt nicht) ->
+  // der PV-Ueberschuss (360 W) erklaert die komplette Luecke zum gemessenen
+  // Wechselrichter-Ausgang (380 W) -> kein "Sonstiges/nicht erfasst" mehr.
+  const row = {
+    pv1_watt: 200, pv2_watt: 200, ac_house_watt: 380, battery_power_watt: 0,
+    inv_to_plug_watt: 30, permanent_watt: 10, grid_cons_watt: 0,
+  };
+  const flow = flowModel(row);
+  const b = houseBreakdown(flow, []);
+  assert.equal(b.items.find((i) => i.kind === 'residual'), undefined);
+  assert.ok(Math.abs(b.feedIn - 340) < 1e-9, 'Einspeisung wird auf die beobachtete Luecke gedeckelt');
+  assert.ok(Math.abs(b.total - 40) < 1e-9, 'Hausnetz-Gesamt darf die Einspeisung nicht enthalten');
+});
+
+test('houseBreakdown weist den durch Einspeisung nicht erklaerten Rest weiterhin als Sonstiges aus', () => {
+  // Luecke (180 W) ist groesser als die berechnete Einspeisung (130 W) ->
+  // 130 W gelten als Einspeisung, 50 W bleiben unerklaert (Sonstiges).
+  const row = {
+    pv1_watt: 100, pv2_watt: 100, ac_house_watt: 200, battery_power_watt: -50,
+    inv_to_plug_watt: 10, permanent_watt: 10, grid_cons_watt: 0,
+  };
+  const flow = flowModel(row);
+  const b = houseBreakdown(flow, []);
+  const residual = b.items.find((i) => i.kind === 'residual');
+  assert.ok(residual, 'Sonstiges-Posten fehlt');
+  assert.equal(residual.watts, 50);
+  assert.equal(b.feedIn, 130);
+});
+
+test('houseBreakdown veraendert bekannte Faelle ohne Einspeisung nicht (Regression)', () => {
+  // Deckungsgleich mit dem Fall "ergaenzt den nicht erfassten Rest": Speicher
+  // laedt mit dem gesamten PV-Ueberschuss -> feedInPower ist 0, Sonstiges
+  // bleibt unveraendert bei 21 W.
+  const flow = flowModel({ ...LIVE_ROW, ac_house_watt: 40 });
+  const b = houseBreakdown(flow, []);
+  assert.equal(flow.feedIn, 0);
+  assert.equal(b.feedIn, 0);
+  assert.equal(b.items.find((i) => i.kind === 'residual').watts, 21);
+});
+
+test('houseTotalWatt zieht die Netzeinspeisung vom Hausnetz-Gesamt ab', () => {
+  const row = {
+    pv1_watt: 200, pv2_watt: 200, ac_house_watt: 380, battery_power_watt: 0,
+    inv_to_plug_watt: 30, permanent_watt: 10, grid_cons_watt: 0,
+  };
+  const flow = flowModel(row);
+  assert.ok(Math.abs(houseTotalWatt(flow) - 40) < 1e-9);
+});
+
+test('houseBreakdown zaehlt Netzeinspeisung auch im Σ-Zeitraum-Modus nicht als Hausnetz-Verbrauch', () => {
+  const rows = periodRows([
+    ['2026-07-25T12:00:00Z', 200, 200, 380, 0, 30, 10, 0, 50],
+    ['2026-07-25T12:02:00Z', 200, 200, 380, 0, 30, 10, 0, 50],
+  ]);
+  const f = flowCumulative(rows);
+  const b = houseBreakdown(f, []);
+  assert.equal(b.items.find((i) => i.kind === 'residual'), undefined);
+  assert.ok(b.feedIn > 0);
+  assert.ok(Math.abs(b.total - (f.toPlugs + f.baseLoad)) < 1e-9);
+});
