@@ -169,6 +169,11 @@ export function flowModel(row) {
     toPlugs: num(row.inv_to_plug_watt),
     baseLoad: num(row.permanent_watt),
     gridConsumption: Math.max(0, num(row.grid_cons_watt)),
+    // PV-Ueberschuss, der weder Haus noch Speicher zufliesst (s. feedInPower()).
+    // Tritt v. a. auf, wenn die Smart Plugs wenig verbrauchen UND der Speicher
+    // voll ist (nicht mehr laedt) -- dieser Anteil geht ins oeffentliche Netz,
+    // nicht in den Hausverbrauch (s. houseBreakdown()).
+    feedIn: feedInPower(row),
   };
 }
 
@@ -212,7 +217,24 @@ export function flowCumulative(rows) {
     toPlugs: calcEnergyWh(rows, (r) => num(r.inv_to_plug_watt)),
     baseLoad: calcEnergyWh(rows, (r) => num(r.permanent_watt)),
     gridConsumption: calcEnergyWh(rows, (r) => Math.max(0, num(r.grid_cons_watt))),
+    feedIn: calcEnergyWh(rows, feedInPower),
   };
+}
+
+/**
+ * Anteil der Luecke zwischen gemessenem Wechselrichter-Ausgang (`flow.house`)
+ * und den erfassten Hausnetz-Teilstroemen (`toPlugs` + `baseLoad`), der durch
+ * Netzeinspeisung erklaert ist (`flow.feedIn`, s. feedInPower()).
+ *
+ * Beide Groessen sind unabhaengig gemessen/berechnet (Wechselrichter-Sensor
+ * vs. PV-/Speicher-Bilanz) und muessen nicht exakt uebereinstimmen — daher
+ * wird der erklaerte Anteil auf die tatsaechlich beobachtete Luecke gedeckelt.
+ * Ein verbleibender, nicht durch Einspeisung erklaerter Rest bleibt als
+ * `residual` bestehen (z. B. echte unerfasste Verbraucher im Haus).
+ */
+function feedInPortion(flow) {
+  const gap = Math.max(0, flow.house - flow.toPlugs - flow.baseLoad);
+  return Math.min(gap, num(flow.feedIn));
 }
 
 /**
@@ -226,7 +248,12 @@ export function flowCumulative(rows) {
  * nur relativ (Summen, Anteile) und ist daher für beide Fälle korrekt.
  *
  * - `unassigned`: Steckdosenleistung, die keinem konfigurierten Plug zugeordnet ist
- * - `residual`:   Rest zwischen AC-Hausverbrauch und den erfassten Teilströmen
+ * - `residual`:   Rest zwischen AC-Hausverbrauch und den erfassten Teilströmen,
+ *                 SOWEIT er nicht bereits als Netzeinspeisung erklaert ist
+ *                 (s. `feedInPortion()`) — verbrauchen die Smart Plugs weniger
+ *                 und ist der Speicher voll (laedt nicht mehr), fliesst der
+ *                 PV-Überschuss stattdessen ins öffentliche Netz und zählt
+ *                 NICHT zum Hausnetz-Verbrauch.
  * - `grid`:       Anteil, den das Balkonkraftwerk (PV/Speicher) nicht decken konnte
  *                 und der stattdessen aus dem Stromnetz bezogen wurde
  *                 (`grid_cons_watt`, siehe CHANGELOG „Netzbezug im Hausnetz sichtbar").
@@ -240,7 +267,8 @@ export function flowCumulative(rows) {
 export function houseBreakdown(flow, plugs = []) {
   const plugSum = plugs.reduce((s, p) => s + num(p.watts), 0);
   const unassigned = Math.max(0, flow.toPlugs - plugSum);
-  const residual = Math.max(0, flow.house - flow.toPlugs - flow.baseLoad);
+  const feedIn = feedInPortion(flow);
+  const residual = Math.max(0, flow.house - flow.toPlugs - flow.baseLoad - feedIn);
   const items = [
     ...plugs.map((p) => ({ key: `plug:${p.plug_sn}`, name: p.plug_name, watts: num(p.watts), kind: 'plug' })),
   ];
@@ -268,17 +296,20 @@ export function houseBreakdown(flow, plugs = []) {
   return {
     items: items.map((i) => ({ ...i, share: total > 0 ? i.watts / total : 0 })),
     total,
+    // Nicht Teil von `items`/`total` — bewusst kein Hausnetz-Verbraucher,
+    // sondern Ueberschuss, der ins oeffentliche Netz eingespeist wird.
+    feedIn,
   };
 }
 
 /**
  * Gesamter Leistungsbedarf des Hausnetzes aus BEIDEN Quellen: was der
- * Wechselrichter liefert (`flow.house`, aus PV/Speicher) PLUS was zusätzlich
- * aus dem Stromnetz bezogen wird (`flow.gridConsumption`), weil das
- * Balkonkraftwerk den Bedarf (z. B. der Smart Plugs) allein nicht deckt.
- * Beide Werte stammen aus unabhängigen Messungen (Wechselrichter- bzw.
- * Netz-Sensor) und werden hier lediglich addiert, nicht abgeglichen.
+ * Wechselrichter tatsaechlich ins Haus liefert (`flow.house` abzueglich des
+ * Anteils, der stattdessen ins öffentliche Netz eingespeist wird, s.
+ * `feedInPortion()`) PLUS was zusätzlich aus dem Stromnetz bezogen wird
+ * (`flow.gridConsumption`), weil das Balkonkraftwerk den Bedarf (z. B. der
+ * Smart Plugs) allein nicht deckt.
  */
 export function houseTotalWatt(flow) {
-  return flow.house + flow.gridConsumption;
+  return flow.house - feedInPortion(flow) + flow.gridConsumption;
 }
