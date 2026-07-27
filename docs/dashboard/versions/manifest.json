@@ -16,6 +16,13 @@
       "current": false
     },
     {
+      "version": "4.0.0",
+      "date": "2026-07-26",
+      "title": "Menü, Tabs, Stromfluss-Diagramm",
+      "path": "versions/v4.0.0/index.html",
+      "current": false
+    },
+    {
       "version": "3.7.0",
       "date": "2026-07-26",
       "title": "Smart-Plug-Erfassung (9+ Steckdosen)",

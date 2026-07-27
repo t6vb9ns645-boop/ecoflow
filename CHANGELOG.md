@@ -40,12 +40,30 @@ die Versionierung folgt grob [Semantic Versioning](https://semver.org/lang/de/).
   für die kumulierten Kennzahlen, inkl. Regressionsfall für die
   zeitgewichtete Linksregel bei wechselndem Lade-/Entladevorzeichen.
 
+### Fixed (Versionsarchiv)
+- **v4.0.0 fehlte im Versionsarchiv**: Beim Bump auf v4.1.0 wurde der
+  vorherige Stand entgegen dem in `manifest.json` dokumentierten Prozess nie
+  nach `versions/v4.0.0/` kopiert — der Eintrag wurde einfach auf v4.1.0
+  umgeschrieben. v4.0.0 war dadurch nicht mehr aufrufbar. Aus dem Commit-Stand
+  unmittelbar vor dem Versions-Bump rekonstruiert (inkl. der zu dieser Version
+  gehörenden `lib/*.mjs`) und nachträglich archiviert.
+- **Archivierte Versionen ab v4.0.0 (Modul-Struktur) verlinkten die
+  Versionsliste falsch**: Der Link-Aufbau im Menü nutzt Pfade relativ zu
+  `docs/dashboard/` (z. B. `versions/v3.7.0/index.html`); aus einer
+  Archiv-Kopie heraus (zwei Verzeichnisebenen tiefer) zeigten diese Links
+  daher ins Leere. Betrifft v4.0.0 und v4.1.0 gleichermaßen, da beide
+  bereits die Versionsliste besitzen (v3.7.0 ist noch das alte
+  Einzeldatei-Dashboard ohne dieses Menü und war nicht betroffen). Für beide
+  Archiv-Kopien um `../../` ergänzt.
+
 ### Rückwärtskompatibilität
 - **Live-Modus unverändert.** Nur der Zeitraum-Modus der Leistungsübersicht
   ändert sich; die Energie-Kennzahlen in Sektion 02 waren von diesem Fehler
   nie betroffen (sie nutzten schon vorher `calcEnergyWh()`).
-- **v4.1.0 bleibt über das Versionsmenü erreichbar**, mit dem bekannten
-  Verhalten dokumentiert und Rückweg zur aktuellen Fassung.
+- **v4.0.0 und v4.1.0 bleiben über das Versionsmenü erreichbar**, mit den
+  bekannten Verhalten dokumentiert und Rückweg zur aktuellen Fassung; beide
+  wurden per Browser-Test (Datenladen, Zeitraum-Filter, Leistungsfluss-Toggle,
+  Rückweg-Link) verifiziert.
 
 ### Hinweis zur Versionierung
 PATCH-Bump: Korrektur fehlerhaft dargestellter/beschrifteter Messwerte,
