@@ -354,7 +354,6 @@ button{font-family:inherit;}
 .house-total{font-family:var(--mono);font-size:21px;font-weight:700;letter-spacing:-.028em;
   font-variant-numeric:tabular-nums;}
 .house-total .unit{font-size:12px;color:var(--ink-3);font-weight:500;margin-left:3px;}
-#houseFeedInNote{color:var(--ink-3);margin:-7px 0 13px;}
 .split{display:flex;height:7px;border-radius:999px;overflow:hidden;gap:2px;
   background:var(--surface-3);margin-bottom:16px;}
 .split span{display:block;height:100%;min-width:3px;border-radius:999px;}
@@ -431,6 +430,34 @@ footer{margin-top:34px;padding-top:18px;border-top:1px solid var(--hair);
 </style>
 </head>
 <body>
+
+<!-- ══ Archiv-Hinweis (bei der Archivierung ergänzt, sonst unveränderte v4.2.0) ══
+     Ohne diesen Balken wäre die archivierte Version eine Sackgasse: Es gäbe
+     keinen sichtbaren Weg zurück zur aktuellen Fassung. -->
+<style>
+  #archive-bar{position:sticky;top:0;z-index:9998;display:flex;align-items:center;gap:12px;
+    flex-wrap:wrap;padding:9px 18px;background:#1F1608;border-bottom:1px solid #4A3616;
+    font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:12px;color:#F2C97A;}
+  #archive-bar .ab-tag{background:rgba(242,169,59,.18);border:1px solid rgba(242,169,59,.4);
+    color:#F2A93B;border-radius:20px;padding:2px 9px;font-size:10px;font-weight:700;
+    letter-spacing:.08em;text-transform:uppercase;flex-shrink:0;}
+  #archive-bar a{margin-left:auto;color:#1a1208;background:#F2A93B;text-decoration:none;
+    font-weight:600;padding:6px 13px;border-radius:6px;white-space:nowrap;}
+  #archive-bar a:hover{filter:brightness(1.08);}
+  #archive-bar .ab-note{width:100%;color:#C9A268;font-size:11px;line-height:1.5;}
+  @media (max-width:560px){ #archive-bar a{margin-left:0;} }
+</style>
+<div id="archive-bar">
+  <span class="ab-tag">Archiv</span>
+  <span>Du siehst die frühere Version <strong>v4.2.0</strong>. Sie liest dieselben Messdaten und
+    liefert dieselben Energie-Kennzahlen wie die aktuelle Fassung.</span>
+  <a id="backToLatest" href="../../index.html">→ Zur aktuellen Version</a>
+  <span class="ab-note">Bekannte Abweichung dieser Version: Die „Hausnetz — Gesamtverbrauch"-Aufschlüsselung
+    zählte PV-Überschuss, der bei vollem Speicher bzw. geringem Smart-Plug-Verbrauch tatsächlich ins
+    öffentliche Netz eingespeist wurde, faelschlich als „Sonstiges / nicht erfasst" zum Hausnetz-Verbrauch.
+    In v4.2.1 wird dieser Anteil als Netzeinspeisung erkannt und nicht mehr als Hausnetz-Verbraucher
+    geführt.</span>
+</div>
 
 <div id="gate">
   <div class="gate-box">
@@ -603,7 +630,6 @@ footer{margin-top:34px;padding-top:18px;border-top:1px solid var(--hair);
                 </div>
                 <span class="house-total" id="houseTotal">—</span>
               </div>
-              <div class="micro" id="houseFeedInNote" hidden></div>
               <div class="split" id="houseSplit"></div>
               <div class="tiles" id="houseTiles"></div>
             </div>
@@ -633,11 +659,6 @@ footer{margin-top:34px;padding-top:18px;border-top:1px solid var(--hair);
                   aus dem Stromnetz, sobald PV und Speicher den Bedarf nicht vollständig decken können — z. B. wenn
                   die Smart Plugs mehr Leistung ziehen, als das Balkonkraftwerk gerade liefert. Dieser Netzbezug
                   wird als eigener Knoten „Netz" mit eigener Kante ins Hausnetz dargestellt.</p>
-                <p class="info-text"><strong>Netzeinspeisung:</strong> Umgekehrt kann der Wechselrichter auch mehr
-                  Leistung ausgeben, als das Hausnetz gerade abnimmt — z. B. wenn die Smart Plugs wenig verbrauchen
-                  und der Speicher voll ist (nicht mehr lädt). Dieser Überschuss fließt ins öffentliche Netz und
-                  wird als Hinweis unter „Hausnetz — Gesamtverbrauch" angezeigt, zählt dort aber bewusst
-                  <strong>nicht</strong> als Verbraucher mit (siehe auch Sektion 02, „Einspeisung").</p>
                 <p class="info-text"><strong>Vorzeichen Speicher:</strong> <code>battery_power_watt &lt; 0</code>
                   bedeutet <em>laden</em>, <code>&gt; 0</code> bedeutet <em>entladen</em> (CHANGELOG [3.2.2],
                   an Messdaten verifiziert). Die Pfeilrichtung folgt dieser Konvention.</p>
@@ -778,10 +799,10 @@ import {
 } from './lib/layout.mjs';
 
 /* ── Konfiguration ─────────────────────────────────────────────────────── */
-const DASHBOARD_VERSION = 'v4.2.1';
-const CSV_PATH = '../ecoflow_energie_daten.csv';
-const SMARTPLUGS_CSV_PATH = '../ecoflow_smartplugs_daten.csv';
-const VERSIONS_MANIFEST = './versions/manifest.json';
+const DASHBOARD_VERSION = 'v4.2.0';
+const CSV_PATH = '../../../ecoflow_energie_daten.csv';
+const SMARTPLUGS_CSV_PATH = '../../../ecoflow_smartplugs_daten.csv';
+const VERSIONS_MANIFEST = '../manifest.json';
 const REFRESH_SECONDS = 30;
 
 const C = {
@@ -1034,25 +1055,12 @@ function renderFlow() {
   $('gridVal').innerHTML = flowValueHtml(f.gridConsumption);
   $('nodeGrid').classList.toggle('idle', f.gridConsumption <= 0.5);
 
+  // Gesamtverbrauch = was der Wechselrichter liefert PLUS was zusaetzlich aus
+  // dem Netz bezogen wird, weil das Balkonkraftwerk (PV/Speicher) den Bedarf
+  // (z. B. der Smart Plugs) nicht allein decken kann.
+  $('houseTotal').innerHTML = flowValueHtml(f.house + f.gridConsumption);
+
   const bd = vm.houseBreakdown;
-
-  // Gesamtverbrauch = was der Wechselrichter tatsaechlich ins Haus liefert
-  // (ohne den Anteil, der stattdessen ins oeffentliche Netz eingespeist wird,
-  // s. houseTotalWatt()) PLUS was zusaetzlich aus dem Netz bezogen wird, weil
-  // das Balkonkraftwerk (PV/Speicher) den Bedarf (z. B. der Smart Plugs)
-  // nicht allein decken kann. bd.total entspricht per Konstruktion demselben
-  // Wert (Summe der Einzelposten unten).
-  $('houseTotal').innerHTML = flowValueHtml(bd.total);
-
-  const feedInNote = $('houseFeedInNote');
-  const showFeedIn = bd.feedIn > 0.5;
-  feedInNote.hidden = !showFeedIn;
-  if (showFeedIn) {
-    const fi = flowValueParts(bd.feedIn);
-    feedInNote.textContent = `↗ zusätzlich ${fi.value} ${fi.unit} ins öffentliche Netz eingespeist `
-      + `(Speicher voll bzw. Smart Plugs ziehen wenig — nicht im Hausnetz-Verbrauch enthalten)`;
-  }
-
   const colorOf = (item) => {
     if (item.kind === 'plug') return vm.plugs.latest.find((p) => `plug:${p.plug_sn}` === item.key)?.color || C.net;
     if (item.kind === 'base') return C.base;
