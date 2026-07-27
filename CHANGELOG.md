@@ -9,6 +9,88 @@ die Versionierung folgt grob [Semantic Versioning](https://semver.org/lang/de/).
 
 ---
 
+## [4.0.0] — 2026-07-27
+
+Neustrukturierung der Oberfläche und erstmals testbare Dashboard-Logik.
+
+### Added
+- **Stromfluss-Diagramm („Leistungsübersicht")**: Zeigt den Energiefluss von
+  den beiden Solarpanels in den Wechselrichter, zwischen Wechselrichter und
+  Speicher sowie vom Wechselrichter ins Hausnetz. Der Wechselrichter ist dabei
+  der einzige zentrale Knoten — der Speicher hängt ausschließlich an ihm, und
+  das Hausnetz wird ausschließlich über ihn versorgt.
+  - Das Hausnetz ist **je Smart Plug einzeln** aufgeschlüsselt, zuzüglich des
+    eingestellten Grundbedarfs (`permanent_watt`). Die Anzahl der Posten passt
+    sich automatisch an die Zahl der verbundenen Plugs an.
+  - Umschaltbar zwischen **Live-Momentaufnahme** (letzte Messung) und
+    **Ø Zeitraum** (Durchschnitt über den gewählten Filter).
+  - Aktiver Fluss wird durch bewegte Striche dargestellt, fehlender Fluss durch
+    eine blasse Punktlinie. Der Zustand steckt in Muster *und* Farbe und bleibt
+    dadurch bei `prefers-reduced-motion`, im Screenshot und bei
+    Farbfehlsichtigkeit lesbar.
+- **Zwei Ansichten als Tabs**: „01 Leistungsübersicht" und „02 Einzelwerte"
+  (alle bisherigen Kennzahlen und Diagramme). Wechsel über sichtbare Reiter am
+  Desktop und über **Wischgesten** auf dem Smartphone. Der gewählte Zeitraum
+  gilt für beide Ansichten und wird aus einer gemeinsamen Quelle berechnet, ein
+  Tabwechsel kann die Werte daher nicht verändern.
+- **Vereinheitlichtes Kommandomenü**: Version, Datenaktualisierung und
+  Zeitraum-Filter liegen in einem einklappbaren Menü. Zusammengeklappt zeigt es
+  die aktiven Werte (Version, Datenalter, Zeitraum), aufgeklappt alle Optionen.
+- **Versionsarchiv**: Frühere Dashboard-Stände sind über das Menü aufrufbar.
+  `docs/dashboard/versions/vX.Y.Z/index.html` hält den jeweiligen Snapshot,
+  `versions/manifest.json` dient als Index.
+- **Automatische Tests für die Dashboard-Logik**: 138 Tests mit dem in Node 22
+  eingebauten Test-Runner — keine neue Abhängigkeit, konsistent zu den
+  bestehenden Python-Tests (stdlib `unittest`). Abdeckung der Berechnungsmodule:
+  100 % Lines, 96,6 % Branches, 100 % Functions; die Schwelle von 85 % wird im
+  Testlauf erzwungen (`npm run test:coverage`).
+- **CI-Workflow `tests.yml`**: Führt Node- und Python-Tests bei Push und Pull
+  Request aus. Reine Messdaten-Commits lösen keinen Lauf aus.
+
+### Changed
+- **Berechnungslogik aus `index.html` ausgelagert** nach
+  `docs/dashboard/lib/*.mjs` (CSV-Parsing, Energie-Kennzahlen, Filter und
+  Aggregation, Plug-Gruppierung, Diagramm-Geometrie, View-Model). Die Module
+  werden vom Browser per `<script type="module">` und vom Test-Runner
+  gleichermaßen importiert — Voraussetzung dafür, die Logik überhaupt testen
+  zu können.
+- **Neues Interface**: kontrastreiche Darstellung auf nahezu schwarzem Grund,
+  Archivo für Text und JetBrains Mono für alle Zahlen (Tabellenziffern). Die
+  Datenfarben (Amber, Teal, Periwinkle, Rose) sind gegen Farbfehlsichtigkeit
+  geprüft — paarweise ΔE ≥ 8 in Deutan-, Protan- und Tritan-Simulation, Kontrast
+  ≥ 3:1 gegen den Hintergrund.
+- **Auto-Merge-Workflow respektiert Entwürfe**: PRs von `claude/**`-Branches
+  werden als Entwurf angelegt und nicht mehr ungefragt gemergt. Der bestehende
+  Automatismus greift, sobald ein PR über „Ready for review" freigegeben wird.
+
+### Fixed
+- **Batterie-Vorzeichen in der Live-Momentaufnahme**: Die Kachel zeigte Laden
+  und Entladen vertauscht an (`lädt` bei `battery_power_watt > 0`). Sie folgt
+  jetzt der bereits in [3.2.2] dokumentierten und an Messdaten verifizierten
+  Konvention `< 0 = laden`, wie der Rest der Auswertung. Betroffen waren die
+  Beschriftung der Kachel und der Untertitel des Batterie-Diagramms; die
+  Energie-Kennzahlen waren bereits korrekt.
+- **Smart-Plug-Farben bleiben stabil**: Die Farbe wurde bisher über die
+  Listenposition vergeben und wechselte, sobald Plugs hinzukamen, ausfielen oder
+  sich die Sortierung änderte. Sie leitet sich jetzt aus der Seriennummer ab.
+- **Ausfall der Diagrammbibliothek reißt nicht mehr die ganze Seite mit**: Ein
+  fehlgeschlagener Chart.js-Abruf ließ zuvor das komplette Rendering scheitern,
+  inklusive Kennzahlen und Stromflussdiagramm. Diagramme fallen jetzt einzeln
+  auf einen Hinweis zurück. Abruf- und Darstellungsfehler werden getrennt
+  gemeldet statt beide als „Netzwerkfehler".
+- **`.gitignore` schloss Dashboard-Code aus**: Das Python-Muster `lib/` griff
+  auf jedes Verzeichnis dieses Namens und hätte `docs/dashboard/lib/`
+  stillschweigend von der Versionierung ausgenommen. Das Muster ist jetzt auf
+  das Wurzelverzeichnis begrenzt.
+
+### Hinweis zur Versionierung
+MAJOR-Sprung, weil die Oberfläche neu strukturiert ist (Tabs statt einer
+durchgehenden Seite, Filter im Menü statt in einer eigenen Leiste) und die
+Dashboard-Logik in eigene Module umgezogen ist. Datenformat und Collector
+bleiben unverändert — bestehende CSV-Dateien werden ohne Migration gelesen.
+
+---
+
 ## [3.7.0] — 2026-07-26
 
 ### Added
@@ -323,6 +405,8 @@ Erste produktive Version (GitHub Actions Edition).
 - Erstes Chart.js-Dashboard auf GitHub Pages mit Auto-Refresh.
 - Berechnung der Tageserzeugung (Wh seit Mitternacht).
 
+[4.0.0]: https://github.com/t6vb9ns645-boop/ecoflow/releases/tag/v4.0.0
+[3.7.0]: https://github.com/t6vb9ns645-boop/ecoflow/releases/tag/v3.7.0
 [3.6.1]: https://github.com/t6vb9ns645-boop/ecoflow/releases/tag/v3.6.1
 [3.5.0]: https://github.com/t6vb9ns645-boop/ecoflow/releases/tag/v3.5.0
 [3.4.0]: https://github.com/t6vb9ns645-boop/ecoflow/releases/tag/v3.4.0
