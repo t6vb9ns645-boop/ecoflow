@@ -21,11 +21,15 @@ Darunter zwei Ansichten, umschaltbar über Reiter (Desktop) oder Wischgeste
 (Smartphone):
 
 **01 · Leistungsübersicht** — Stromfluss-Diagramm: PV1/PV2 → Wechselrichter →
-Speicher bzw. Hausnetz. Der Wechselrichter ist der einzige zentrale Knoten; der
-Speicher hängt ausschließlich an ihm, und das Hausnetz wird ausschließlich über
-ihn versorgt. Das Hausnetz ist je Smart Plug einzeln aufgeschlüsselt, zuzüglich
-des eingestellten Grundbedarfs. Umschaltbar zwischen Live-Momentaufnahme und
-Ø über den gewählten Zeitraum.
+Speicher bzw. Hausnetz. Der Wechselrichter ist der zentrale Knoten des
+Balkonkraftwerks; der Speicher hängt ausschließlich an ihm, nicht am Hausnetz.
+Das Hausnetz wird primär über den Wechselrichter versorgt, zusätzlich aber auch
+**direkt aus dem Stromnetz** — sichtbar als eigener Knoten „Netz" mit eigener
+Kante —, sobald PV und Speicher den Bedarf (z. B. der Smart Plugs) nicht
+vollständig decken können (`grid_cons_watt`). Das Hausnetz ist je Smart Plug
+einzeln aufgeschlüsselt, zuzüglich des eingestellten Grundbedarfs und des
+Netzbezugs. Umschaltbar zwischen Live-Momentaufnahme und Ø über den gewählten
+Zeitraum.
 
 **02 · Einzelwerte** — die sieben bekannten Bereiche:
 
@@ -134,6 +138,35 @@ An Messdaten verifiziert:
 Kamen beide vor, weist das Dashboard sie im Ø-Modus zusätzlich getrennt aus
 (`↓ laden · ↑ entladen`).
 
+## ⚡ Netzbezug im Hausnetz
+
+Das Balkonkraftwerk (PV + Speicher) deckt den Hausverbrauch nicht immer
+vollständig — reicht die Leistung nicht aus (z. B. weil die Smart Plugs mehr
+ziehen, als PV/Speicher gerade liefern), wird der Rest automatisch aus dem
+öffentlichen Stromnetz bezogen. Bis v4.0.0 wurde dieser Anteil zwar erfasst
+(`grid_cons_watt`), aber **nirgends in der Leistungsübersicht dargestellt** —
+der Diagramm-Knoten „Hausnetz" zeigte nur den vom Wechselrichter gelieferten
+Anteil, während die einzeln aufgeschlüsselten Smart Plugs ihre tatsächliche
+(ggf. netzgedeckte) Leistung zeigten. Das ergab widersprüchliche Zahlen, z. B.
+„Hausnetz 0 W", während die Steckdosen-Kacheln darunter in Summe 68 W auswiesen.
+
+Seit v4.1.0 ist der Netzbezug ein eigener Diagramm-Knoten **„Netz"** mit
+eigener Kante direkt ins Hausnetz (parallel zum Wechselrichter, unabhängig
+von ihm — genau wie in der Realität: Balkonkraftwerk und Netzanschluss speisen
+dieselbe Steckdose/den selben Sicherungskasten). Der Gesamtverbrauch
+„Hausnetz — Gesamtverbrauch" ist jetzt `ac_house_watt + grid_cons_watt`, und
+die Aufschlüsselung zeigt einen eigenen Posten „Netzbezug (vom
+Balkonkraftwerk nicht gedeckt)".
+
+**Warum keine neue CSV?** `grid_cons_watt` steckt bereits seit Schema v2 in
+`docs/ecoflow_energie_daten.csv` (siehe Tabelle unten) und durchläuft die
+komplette Datenpipeline (Parsing, Aggregation, Nullwert-Prüfung) unverändert.
+Der Fehler lag ausschließlich in der Darstellung, nicht in der Datenhaltung —
+eine zusätzliche CSV würde denselben Messwert nur duplizieren, ohne einen
+Fehler zu beheben. Eine Erweiterung wäre nur dann sinnvoll, wenn EcoFlow den
+Netzbezug irgendwann pro Smart Plug (statt nur als Summe des gesamten
+Haushalts) melden würde — das ist mit der aktuellen API nicht der Fall.
+
 ## 🔌 Smart Plugs (9+ Steckdosen)
 
 Beliebig viele EcoFlow Smart Plugs können zusätzlich erfasst werden — ohne
@@ -218,4 +251,4 @@ Dieses Projekt ist für den persönlichen Gebrauch gedacht.
 
 **Status:** Production Ready  
 **Letzte Aktualisierung:** Juli 2026  
-**Version:** 4.0.0 — siehe [CHANGELOG.md](CHANGELOG.md)
+**Version:** 4.1.0 — siehe [CHANGELOG.md](CHANGELOG.md)

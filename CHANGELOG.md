@@ -9,6 +9,57 @@ die Versionierung folgt grob [Semantic Versioning](https://semver.org/lang/de/).
 
 ---
 
+## [4.1.0] — 2026-07-27
+
+### Fixed
+- **Netzbezug im Hausnetz war in der Leistungsübersicht unsichtbar**: Reicht das
+  Balkonkraftwerk (PV/Speicher) nicht aus, um den Hausbedarf zu decken — z. B.
+  weil die Smart Plugs mehr Leistung ziehen, als gerade erzeugt wird —, bezieht
+  die Anlage automatisch den Rest aus dem Stromnetz (`grid_cons_watt`). Dieser
+  Wert wurde zwar seit Schema v2 erfasst und in `flowModel()` sogar schon
+  berechnet (`gridConsumption`), aber nirgends dargestellt: Der Knoten
+  „Hausnetz" zeigte nur den vom Wechselrichter gelieferten Anteil
+  (`ac_house_watt`), während die darunter einzeln aufgeschlüsselten Smart Plugs
+  ihre tatsächliche — ggf. netzgedeckte — Leistung zeigten. An echten
+  Messdaten (27.07., 08:xx Uhr) ließ sich das Auseinanderlaufen konkret
+  nachweisen: „Hausnetz 0 W" bei gleichzeitig ca. 58–89 W Smart-Plug-Verbrauch,
+  gedeckt aus dem Netz (`grid_cons_watt` 59–171 W je Messpunkt), während die
+  komplette PV-Leistung in den Speicher lief.
+
+### Added
+- **Diagramm-Knoten „Netz"** in der Leistungsübersicht, symmetrisch zum
+  Speicher-Knoten positioniert. Er speist das Hausnetz über eine eigene Kante
+  **direkt und unabhängig vom Wechselrichter** — genau wie in der Realität:
+  Balkonkraftwerk und Netzanschluss speisen denselben Sicherungskasten. Aktiv
+  (bewegte Kante) nur, wenn tatsächlich Netzstrom fließt; sonst blass/gepunktet
+  wie die übrigen inaktiven Kanten.
+- **Posten „Netzbezug (vom Balkonkraftwerk nicht gedeckt)"** in der
+  Hausnetz-Aufschlüsselung, wenn `grid_cons_watt > 0`.
+- **„Hausnetz — Gesamtverbrauch"** ersetzt „Hausnetz — AC-Verbrauch" als
+  Kopfzeile: der Gesamtwert ist jetzt `ac_house_watt + grid_cons_watt` statt nur
+  des Wechselrichter-Anteils, passend zu den beiden jetzt sichtbaren Quellen.
+- `houseTotalWatt(flow)` in `energy.mjs` als Hilfsfunktion für diesen
+  kombinierten Gesamtwert.
+- 12 neue Tests (`energy.test.mjs`, `layout.test.mjs`) für Netzbezug-Posten,
+  Diagramm-Kante und Knoten-Geometrie, u. a. mit den oben genannten echten
+  Messwerten als Regressionsfall.
+
+### Geprüft, nicht umgesetzt
+- **Neue CSV für Stromverbrauch**: nicht sinnvoll. `grid_cons_watt` liegt
+  bereits seit Schema v2 in `docs/ecoflow_energie_daten.csv` und durchläuft
+  Parsing, Aggregation und Nullwert-Prüfung unverändert — der Fehler lag
+  ausschließlich in der Darstellung, nicht in der Datenhaltung. Eine eigene CSV
+  würde denselben Messwert nur duplizieren. Sinnvoll wäre das erst, wenn
+  EcoFlow Netzbezug pro Smart Plug statt nur als Haushaltssumme melden würde —
+  das gibt die aktuelle API nicht her.
+
+### Hinweis zur Versionierung
+MINOR-Bump: neue, sichtbare Fähigkeit (Netz-Knoten/-Kante, neuer
+Aufschlüsselungsposten) auf Basis bereits vorhandener Daten, keine
+Breaking Changes an CSV-Schema, Collector oder bestehenden Berechnungen.
+
+---
+
 ## [4.0.0] — 2026-07-27
 
 Neustrukturierung der Oberfläche und erstmals testbare Dashboard-Logik.
