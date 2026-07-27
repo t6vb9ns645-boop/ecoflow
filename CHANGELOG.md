@@ -9,6 +9,52 @@ die Versionierung folgt grob [Semantic Versioning](https://semver.org/lang/de/).
 
 ---
 
+## [4.2.2] — 2026-07-27
+
+### Fixed
+- **Smart-Plug-Spannung und -Temperatur waren um Faktor 10 zu klein**: Seit
+  Einführung der Smart-Plug-Erfassung (v3.7.0) ging `extract_smartplug()` in
+  `ecoflow_tracker_github.py` — auf Basis der undokumentierten Community-
+  Referenz [hassio-ecoflow-cloud](https://github.com/tolwi/hassio-ecoflow-cloud)
+  — davon aus, dass `volt` und `temp` wie bei PowerStream Integer×10 kodiert
+  sind, und teilte beide Werte durch 10. Anhand der `DEBUG`-Rohdaten der
+  ersten produktiven Plugs (GitHub-Actions-Log, 27.07.) verifiziert: Beide
+  Felder liefern bereits Endwerte (z. B. `volt=235` → 235 V, `temp=34` →
+  34 °C). Dashboard und CSV zeigten dadurch bislang ca. 23 V statt ~230 V
+  (deutsche Netzspannung) und ca. 3 °C statt ~30 °C (Gerätetemperatur) — beides
+  physikalisch nicht plausibel und im Live-Modus der Smart-Plug-Kacheln (Tab
+  02, siehe v4.2.0) sichtbar.
+- `volt`/`temp_c` werden jetzt unskaliert übernommen; `watts` (×10, Dezi-Watt)
+  und `current_a` (÷1000, Milliampere) waren bereits korrekt und bleiben
+  unverändert.
+- **Bestehende Messwerte werden automatisch geheilt**: Neue Funktion
+  `fix_smartplug_scale_if_needed()`, läuft wie `migrate_csv_if_needed()` bei
+  jedem Collector-Start mit und korrigiert `volt`/`temp_c` ×10 in Zeilen, die
+  noch die alte Skalierung tragen (erkannt an `volt < 100` — physikalisch
+  unmöglich für ein am 230-V-Netz betriebenes Gerät). Idempotent, daher
+  gefahrlos dauerhaft aktiv; bereits korrekte Zeilen bleiben unangetastet.
+  Bewusst keine manuelle Einmal-Migration der CSV: Die Datei wächst im
+  selben Repository weiterhin automatisiert alle ~2 Minuten, ein direkter
+  Rewrite hätte mit jedem parallelen Collector-Lauf einen Merge-Konflikt
+  riskiert. Die Selbstheilung korrigiert stattdessen alle bis zum ersten
+  Lauf nach diesem Fix aufgelaufenen Zeilen automatisch in einem Rutsch
+  (anders als beim WR-Temperatur-Fix in v3.6.1, der nur zukünftige Werte
+  betraf, aber ohne dessen Merge-Konflikt-Risiko).
+
+### Changed
+- `tests/test_ecoflow_tracker.py`: Testdaten für `extract_smartplug()` auf
+  reale, plausible Rohwerte umgestellt (volt/temp ohne ×10-Annahme); neue
+  Tests für `fix_smartplug_scale_if_needed()` (Korrektur, Idempotenz,
+  gemischte Alt-/Neu-Zeilen, Null-/Leerwerte).
+- README: Hinweis zur Smart-Plug-Skalierung aktualisiert — als verifiziert
+  markiert statt als offene Prüfung.
+
+### Rückwärtskompatibilität
+- **Kein Schema-Wechsel**: Spalten und `SMARTPLUG_SCHEMA_VERSION` bleiben
+  unverändert, nur die Werte in `volt`/`temp_c` wurden korrigiert.
+- Dashboard-seitig war keine Code-Änderung nötig — `csv.mjs` übernimmt die
+  Spalten ungeprüft, die Korrektur wirkt allein über die Werte in der CSV.
+
 ## [4.2.1] — 2026-07-27
 
 ### Fixed
