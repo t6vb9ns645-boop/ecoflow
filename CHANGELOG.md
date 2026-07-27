@@ -9,6 +9,33 @@ die Versionierung folgt grob [Semantic Versioning](https://semver.org/lang/de/).
 
 ---
 
+## [4.2.0] — 2026-07-27
+
+### Added
+- **Smart-Plug-Kacheln (Tab 02 → 06) zeigen jetzt strukturierte Messdaten,
+  passend zum gewählten Ansichtsmodus**: Bisher zeigte jede Kachel unabhängig
+  vom Modus stets nur die letzte Momentanleistung (W) und den Schaltzustand.
+  - **Live-Modus**: weiterhin die Leistung groß, zusätzlich einheitlich für
+    alle Kacheln Spannung (V), Strom (A), Temperatur (°C) und
+    LED-Helligkeit als kleines, strukturiertes Detailraster.
+  - **Σ-Zeitraum-Modus**: die Kacheln zeigen ausschließlich die über den
+    Menü-Filter kumulierte Energie (Wh/kWh) je Steckdose — Momentanwerte wie
+    Spannung/Strom/Temperatur haben über einen Zeitraum keine sinnvolle
+    Summe und entfallen dort bewusst.
+- `cumulativePlugSummary()` in `plugs.mjs`: Gesamtenergie (Wh) über alle
+  Smart Plugs im Σ-Zeitraum-Modus, Pendant zu `plugSummary()`.
+- `vm.plugs.cumulative` / `vm.plugs.cumulativeSummary` im View-Model: nutzen
+  dieselbe zeitgewichtete Integration wie die bereits bestehende
+  Hausnetz-Aufschlüsselung im Σ-Modus (`cumulativePlugMeasurements()`,
+  siehe v4.1.1), jetzt auch für Tab 02 verfügbar.
+- 4 neue Tests (`plugs.test.mjs`, `viewmodel.test.mjs`) für die kumulierte
+  Gesamtenergie über alle Plugs.
+
+### Rückwärtskompatibilität
+- **Live-Modus-Kennzahlen unverändert**, nur um zusätzliche Felder ergänzt.
+  Der Σ-Zeitraum-Modus für Tab 02 ist neu; frühere Versionen zeigten dort
+  weiterhin die letzte Momentanmessung statt kumulierter Energie.
+
 ## [4.1.1] — 2026-07-27
 
 ### Fixed

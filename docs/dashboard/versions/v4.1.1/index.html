@@ -276,11 +276,7 @@ button{font-family:inherit;}
 .tile .tval{font-family:var(--mono);font-size:19px;font-weight:700;letter-spacing:-.025em;
   padding-left:7px;font-variant-numeric:tabular-nums;}
 .tile .tval .unit{font-size:11px;color:var(--ink-3);font-weight:500;margin-left:3px;}
-.tile .tsub{display:grid;grid-template-columns:1fr auto;gap:4px 8px;margin-top:9px;padding-left:7px;}
-.tile .tsub span{font-size:10px;color:var(--ink-3);}
-.tile .tsub b{font-family:var(--mono);font-size:10.5px;font-weight:600;color:var(--ink-2);
-  text-align:right;font-variant-numeric:tabular-nums;}
-.tile .tfoot{padding-left:7px;margin-top:9px;}
+.tile .tfoot{padding-left:7px;margin-top:7px;}
 
 .empty{padding:34px 20px;text-align:center;color:var(--ink-3);font-size:13.5px;
   border:1px dashed var(--hair-strong);border-radius:var(--r-md);}
@@ -430,6 +426,34 @@ footer{margin-top:34px;padding-top:18px;border-top:1px solid var(--hair);
 </style>
 </head>
 <body>
+
+<!-- ══ Archiv-Hinweis (bei der Archivierung ergänzt, sonst unveränderte v4.1.1) ══
+     Ohne diesen Balken wäre die archivierte Version eine Sackgasse: Es gäbe
+     keinen sichtbaren Weg zurück zur aktuellen Fassung. -->
+<style>
+  #archive-bar{position:sticky;top:0;z-index:9998;display:flex;align-items:center;gap:12px;
+    flex-wrap:wrap;padding:9px 18px;background:#1F1608;border-bottom:1px solid #4A3616;
+    font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:12px;color:#F2C97A;}
+  #archive-bar .ab-tag{background:rgba(242,169,59,.18);border:1px solid rgba(242,169,59,.4);
+    color:#F2A93B;border-radius:20px;padding:2px 9px;font-size:10px;font-weight:700;
+    letter-spacing:.08em;text-transform:uppercase;flex-shrink:0;}
+  #archive-bar a{margin-left:auto;color:#1a1208;background:#F2A93B;text-decoration:none;
+    font-weight:600;padding:6px 13px;border-radius:6px;white-space:nowrap;}
+  #archive-bar a:hover{filter:brightness(1.08);}
+  #archive-bar .ab-note{width:100%;color:#C9A268;font-size:11px;line-height:1.5;}
+  @media (max-width:560px){ #archive-bar a{margin-left:0;} }
+</style>
+<div id="archive-bar">
+  <span class="ab-tag">Archiv</span>
+  <span>Du siehst die frühere Version <strong>v4.1.1</strong>. Sie liest dieselben Messdaten und
+    liefert dieselben Energie-Kennzahlen wie die aktuelle Fassung.</span>
+  <a id="backToLatest" href="../../index.html">→ Zur aktuellen Version</a>
+  <span class="ab-note">Bekannte Abweichung dieser Version: Die Smart-Plug-Kacheln in Tab 02 zeigten
+    unabhängig vom Ansichtsmodus stets nur die letzte Momentanmessung (W) je Steckdose, ohne
+    Spannung/Strom/Temperatur/LED-Helligkeit und ohne kumulierte Energie im Σ-Zeitraum-Modus.
+    In v4.2.0 zeigt der Live-Modus zusätzlich die strukturierten Messdaten je Steckdose, der
+    Σ-Zeitraum-Modus stattdessen die kumulierte Energie (Wh/kWh) je Steckdose.</span>
+</div>
 
 <div id="gate">
   <div class="gate-box">
@@ -771,10 +795,10 @@ import {
 } from './lib/layout.mjs';
 
 /* ── Konfiguration ─────────────────────────────────────────────────────── */
-const DASHBOARD_VERSION = 'v4.2.0';
-const CSV_PATH = '../ecoflow_energie_daten.csv';
-const SMARTPLUGS_CSV_PATH = '../ecoflow_smartplugs_daten.csv';
-const VERSIONS_MANIFEST = './versions/manifest.json';
+const DASHBOARD_VERSION = 'v4.1.1';
+const CSV_PATH = '../../../ecoflow_energie_daten.csv';
+const SMARTPLUGS_CSV_PATH = '../../../ecoflow_smartplugs_daten.csv';
+const VERSIONS_MANIFEST = '../manifest.json';
 const REFRESH_SECONDS = 30;
 
 const C = {
@@ -1312,56 +1336,23 @@ function renderDetails() {
   renderQuality();
 }
 
-/** Eine Zeile im strukturierten Kachel-Detailraster (Live-Modus). */
-function plugSubRow(label, value, unit) {
-  return `<span>${label}</span><b>${fmtMeasure(value, unit)}</b>`;
-}
-
 function renderPlugs() {
   const card = $('plugsCard');
   const groups = vm.plugs.groups;
   card.hidden = groups.length === 0;
   if (!groups.length) return;
 
-  const live = state.flowMode === 'live';
-
-  if (live) {
-    const s = vm.plugs.summary;
-    $('plugsAside').textContent = `Stand ${fmtLabel(groups[0].last.t)} Uhr`;
-    $('plugsSummary').innerHTML = metric('solar', 'Gesamtverbrauch Smart Plugs', fmtW(s.totalWatts), 'W',
-      `${s.count} Plug${s.count === 1 ? '' : 's'} · ${s.onCount} an, ${s.offCount} aus`);
-    $('plugTiles').innerHTML = groups.map((g) => `
-      <div class="tile">
-        <span class="rail" style="background:${g.color}"></span>
-        <div class="tname" title="${escapeHtml(g.name)}">${escapeHtml(g.name)}</div>
-        <div class="tval">${fmtW(g.last.watts)}<span class="unit">W</span></div>
-        <div class="tsub">
-          ${plugSubRow('Spannung', g.last.volt, 'V')}
-          ${plugSubRow('Strom', g.last.current_a, 'A')}
-          ${plugSubRow('Temperatur', g.last.temp_c, '°C')}
-          ${plugSubRow('LED-Helligkeit', g.last.led_brightness, '')}
-        </div>
-        <div class="tfoot"><span class="pill ${g.last.switch_sta > 0 ? 'on' : 'off'}">${g.last.switch_sta > 0 ? 'An' : 'Aus'}</span></div>
-      </div>`).join('');
-  } else {
-    // Σ Zeitraum: nur die kumulierte Energie je Plug — Momentanwerte wie
-    // Spannung/Strom/Temperatur haben ueber einen Zeitraum keine sinnvolle
-    // Summe und entfallen hier bewusst (s. cumulativePlugMeasurements()).
-    const cs = vm.plugs.cumulativeSummary;
-    const total = fmtEnergy(cs.totalWh);
-    $('plugsAside').textContent = `Σ ${vm.rangeLabel} · ${fmtCount(vm.filtered.length)} Messwerte`;
-    $('plugsSummary').innerHTML = metric('solar', 'Gesamtverbrauch Smart Plugs', total.value, total.unit,
-      `${cs.count} Plug${cs.count === 1 ? '' : 's'}`);
-    $('plugTiles').innerHTML = vm.plugs.cumulative.map((p) => {
-      const e = fmtEnergy(p.watts);
-      return `
-      <div class="tile">
-        <span class="rail" style="background:${p.color}"></span>
-        <div class="tname" title="${escapeHtml(p.plug_name)}">${escapeHtml(p.plug_name)}</div>
-        <div class="tval">${e.value}<span class="unit">${e.unit}</span></div>
-      </div>`;
-    }).join('');
-  }
+  const s = vm.plugs.summary;
+  $('plugsAside').textContent = `Stand ${fmtLabel(groups[0].last.t)} Uhr`;
+  $('plugsSummary').innerHTML = metric('solar', 'Gesamtverbrauch Smart Plugs', fmtW(s.totalWatts), 'W',
+    `${s.count} Plug${s.count === 1 ? '' : 's'} · ${s.onCount} an, ${s.offCount} aus`);
+  $('plugTiles').innerHTML = groups.map((g) => `
+    <div class="tile">
+      <span class="rail" style="background:${g.color}"></span>
+      <div class="tname" title="${escapeHtml(g.name)}">${escapeHtml(g.name)}</div>
+      <div class="tval">${fmtW(g.last.watts)}<span class="unit">W</span></div>
+      <div class="tfoot"><span class="pill ${g.last.switch_sta > 0 ? 'on' : 'off'}">${g.last.switch_sta > 0 ? 'An' : 'Aus'}</span></div>
+    </div>`).join('');
 
   const stamps = [...new Set(vm.displayPlugs.map((r) => r.t))].sort();
   line('chartPlugs', stamps.map(fmtLabel), groups.map((g) => {
