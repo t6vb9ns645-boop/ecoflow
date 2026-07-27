@@ -9,6 +9,51 @@ die Versionierung folgt grob [Semantic Versioning](https://semver.org/lang/de/).
 
 ---
 
+## [4.1.1] — 2026-07-27
+
+### Fixed
+- **„Ø Zeitraum" zeigte einen Leistungsmittelwert statt kumulierter Energie**:
+  Die Leistungsübersicht bot neben der Live-Momentaufnahme (W) einen zweiten
+  Modus „Ø Zeitraum" an, der aber lediglich alle Rohfelder im gewählten
+  Menü-Filter arithmetisch mittelte (`averageRow()`) und daraus wie im
+  Live-Modus eine Momentanleistung berechnete — irreführend neben einer
+  echten Momentaufnahme und ohne Bezug zur tatsächlich geflossenen Energie
+  über den Zeitraum. Betroffen waren PV1/PV2/Wechselrichter, Speicher
+  (inkl. Lade-/Entladeanteil), Netz, Hausnetz-Gesamtverbrauch und jeder
+  Posten der Hausnetz-Aufschlüsselung (Smart Plugs, Grundbedarf, Rest,
+  Netzbezug) — dort wurde zusätzlich nur der letzte Messwert je Plug
+  gezeigt, nicht dessen Verbrauch über den Zeitraum.
+- Der Modus heißt jetzt **„Σ Zeitraum"** und zeigt die über den eingestellten
+  Menü-Filter **kumulierte Energie** (Wh/kWh) — zeitgewichtet aus den
+  Rohmessungen aufsummiert (`calcEnergyWh()`), exakt wie die bereits
+  bestehenden Energie-Kennzahlen in Sektion 02. Der Ladezustand (SOC) ist
+  davon ausgenommen, da ein Prozentwert sich nicht aufsummieren lässt; er
+  zeigt weiterhin den letzten bekannten Stand im Zeitraum.
+
+### Added
+- `flowCumulative()` in `energy.mjs`: kumuliertes Pendant zu `flowModel()`
+  mit denselben Feldnamen (Wh statt W), inkl. getrennter Lade-/Entladeenergie
+  für den Speicher.
+- `cumulativePlugMeasurements()` in `plugs.mjs`: kumulierte Energie je Smart
+  Plug über den Zeitraum, als Pendant zu `latestPlugMeasurements()`.
+- 20 neue Tests (`energy.test.mjs`, `plugs.test.mjs`, `viewmodel.test.mjs`)
+  für die kumulierten Kennzahlen, inkl. Regressionsfall für die
+  zeitgewichtete Linksregel bei wechselndem Lade-/Entladevorzeichen.
+
+### Rückwärtskompatibilität
+- **Live-Modus unverändert.** Nur der Zeitraum-Modus der Leistungsübersicht
+  ändert sich; die Energie-Kennzahlen in Sektion 02 waren von diesem Fehler
+  nie betroffen (sie nutzten schon vorher `calcEnergyWh()`).
+- **v4.1.0 bleibt über das Versionsmenü erreichbar**, mit dem bekannten
+  Verhalten dokumentiert und Rückweg zur aktuellen Fassung.
+
+### Hinweis zur Versionierung
+PATCH-Bump: Korrektur fehlerhaft dargestellter/beschrifteter Messwerte,
+keine neue Fähigkeit, keine Breaking Changes an CSV-Schema oder den
+bestehenden Energie-Kennzahlen.
+
+---
+
 ## [4.1.0] — 2026-07-27
 
 ### Fixed

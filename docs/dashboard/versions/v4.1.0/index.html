@@ -1,0 +1,1578 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#05070A">
+<title>EcoFlow BKW — Dashboard v4.0.0</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+/* ═══════════════════════════════════════════════════════════════════════════
+   Design-Tokens — v4.0.0
+
+   Grund: nahezu Schwarz mit leichtem Blaustich, damit die Amber-Akzente
+   warm dagegen stehen. Datenfarben sind gegen Farbfehlsichtigkeit geprueft
+   (Amber/Teal/Periwinkle/Rose/Magenta, paarweise ΔE >= 8 in Deutan/Protan/Tritan).
+   ═══════════════════════════════════════════════════════════════════════════ */
+:root{
+  --bg:#05070A;
+  --surface-1:#0B1016;
+  --surface-2:#111922;
+  --surface-3:#18222D;
+  --hair:#1D2731;
+  --hair-strong:#2A3846;
+
+  --ink:#F5F7FA;
+  --ink-2:#9BAABC;
+  --ink-3:#63748A;
+
+  --accent:#FFB020;
+  --accent-ink:#1A1204;
+  --accent-soft:rgba(255,176,32,.14);
+  --accent-line:rgba(255,176,32,.34);
+
+  --solar:#FFB020;
+  --batt:#2DD4BF;
+  --net:#8B93FF;
+  --base:#FF5D8F;
+  --grid:#E879F9;
+  --neutral-series:#F5F7FA;
+
+  --ok:#2DD4BF;
+  --ok-bg:rgba(45,212,191,.12);
+  --danger:#FF6B6B;
+  --danger-bg:rgba(255,107,107,.12);
+
+  --hub-glow:rgba(139,147,255,.30);
+
+  --font:'Archivo',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  --mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+
+  --r-sm:8px; --r-md:12px; --r-lg:18px; --r-xl:28px;
+  --shell:1120px;
+}
+
+*{box-sizing:border-box;}
+html{-webkit-text-size-adjust:100%;}
+body{
+  margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+  font-size:15px;line-height:1.5;
+}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px;}
+button{font-family:inherit;}
+
+.shell{max-width:var(--shell);margin:0 auto;padding:0 20px 72px;}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums;font-feature-settings:'tnum' 1;}
+
+/* Mikro-Label: durchgaengiges Muster fuer alle Beschriftungen */
+.micro{
+  font-family:var(--mono);font-size:10px;font-weight:500;text-transform:uppercase;
+  letter-spacing:.14em;color:var(--ink-3);
+}
+
+/* ── Kopfbereich ─────────────────────────────────────────────────────────── */
+.masthead{
+  display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;
+  padding:26px 0 20px;
+}
+.brand{display:flex;align-items:center;gap:13px;min-width:0;}
+.brand-mark{
+  width:38px;height:38px;border-radius:11px;flex-shrink:0;display:grid;place-items:center;
+  background:linear-gradient(145deg,#FFC44D,#E08700);color:#1A1204;
+}
+.brand-text h1{margin:0;font-size:19px;font-weight:800;letter-spacing:-.022em;line-height:1.15;}
+.brand-text .sub{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--ink-3);margin-top:3px;}
+.masthead-right{display:flex;align-items:center;gap:10px;}
+.vpill{
+  font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.04em;
+  background:var(--accent-soft);color:var(--accent);border:1px solid var(--accent-line);
+  border-radius:999px;padding:4px 11px;
+}
+
+/* ── Kommandoleiste: Version + Aktualisierung + Filter ───────────────────── */
+.command{
+  position:sticky;top:0;z-index:40;margin-bottom:22px;
+  background:rgba(11,16,22,.86);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  border:1px solid var(--hair);border-radius:var(--r-lg);overflow:hidden;
+}
+.command-bar{
+  width:100%;display:flex;align-items:center;gap:14px;padding:13px 16px;
+  background:none;border:none;color:var(--ink);cursor:pointer;text-align:left;
+}
+.command-bar:hover{background:rgba(255,255,255,.028);}
+.cmd-chev{
+  width:22px;height:22px;flex-shrink:0;display:grid;place-items:center;border-radius:6px;
+  background:var(--surface-2);color:var(--ink-2);transition:transform .28s cubic-bezier(.3,.7,0,1);
+}
+.command.open .cmd-chev{transform:rotate(90deg);}
+.cmd-facets{display:flex;align-items:center;gap:14px;flex-wrap:wrap;min-width:0;flex:1;}
+.facet{display:flex;flex-direction:column;gap:2px;min-width:0;}
+.facet .val{font-size:13px;font-weight:600;letter-spacing:-.01em;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;}
+.facet .val.accent{color:var(--accent);}
+.facet-div{width:1px;height:26px;background:var(--hair);flex-shrink:0;}
+.live-dot{
+  width:7px;height:7px;border-radius:50%;background:var(--ok);flex-shrink:0;
+  box-shadow:0 0 0 3px var(--ok-bg);
+}
+.live-dot.stale{background:var(--danger);box-shadow:0 0 0 3px var(--danger-bg);}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.35;}}
+.live-dot:not(.stale){animation:pulse 2.4s ease-in-out infinite;}
+@media (prefers-reduced-motion:reduce){.live-dot{animation:none;}}
+.cmd-action{
+  margin-left:auto;font-family:var(--mono);font-size:10px;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--ink-3);flex-shrink:0;
+}
+
+.command-body{display:grid;grid-template-rows:0fr;transition:grid-template-rows .3s cubic-bezier(.3,.7,0,1);}
+.command.open .command-body{grid-template-rows:1fr;}
+.command-body-inner{overflow:hidden;}
+.command-panels{border-top:1px solid var(--hair);padding:4px 16px 18px;}
+.cgroup{padding:16px 0 4px;}
+.cgroup + .cgroup{border-top:1px solid var(--hair);}
+.cgroup-label{margin-bottom:11px;}
+
+.vlist{display:flex;flex-direction:column;gap:2px;}
+.vitem{
+  display:flex;align-items:baseline;justify-content:space-between;gap:12px;
+  padding:9px 11px;border-radius:var(--r-sm);text-decoration:none;color:var(--ink);
+  border:1px solid transparent;transition:background .15s,border-color .15s;
+}
+.vitem:hover{background:var(--surface-2);border-color:var(--hair);}
+.vitem.current{background:var(--accent-soft);border-color:var(--accent-line);}
+.vitem .vtag{font-family:var(--mono);font-size:12.5px;font-weight:700;}
+.vitem.current .vtag{color:var(--accent);}
+.vitem .vtitle{font-size:12.5px;color:var(--ink-2);}
+.vitem .vdate{font-family:var(--mono);font-size:11px;color:var(--ink-3);flex-shrink:0;}
+.vhint{font-size:11.5px;color:var(--ink-3);line-height:1.6;margin-top:12px;padding-left:10px;
+  border-left:2px solid var(--hair);}
+.batt-split{letter-spacing:-.012em;}
+
+.refresh-row{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;}
+.status-text{display:flex;align-items:center;gap:9px;font-family:var(--mono);font-size:12px;color:var(--ink-2);}
+.status-text.stale{color:var(--danger);}
+.refresh-actions{display:flex;align-items:center;gap:12px;}
+.countdown{font-family:var(--mono);font-size:11px;color:var(--ink-3);}
+.btn{
+  font-family:var(--mono);font-size:11.5px;font-weight:700;letter-spacing:.04em;
+  padding:8px 14px;border-radius:var(--r-sm);cursor:pointer;border:1px solid transparent;
+  transition:filter .15s,background .15s;
+}
+.btn-primary{background:var(--accent);color:var(--accent-ink);}
+.btn-primary:hover{filter:brightness(1.09);}
+.btn-ghost{background:var(--surface-2);color:var(--ink-2);border-color:var(--hair);}
+.btn-ghost:hover{color:var(--ink);border-color:var(--hair-strong);}
+
+.chips{display:flex;gap:6px;flex-wrap:wrap;}
+.chip{
+  font-family:var(--mono);font-size:11.5px;font-weight:500;padding:7px 13px;
+  border-radius:999px;border:1px solid var(--hair);background:var(--surface-2);
+  color:var(--ink-2);cursor:pointer;transition:all .15s;
+}
+.chip:hover{color:var(--ink);border-color:var(--hair-strong);}
+.chip.active{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:700;}
+.range-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:13px;}
+.inp{
+  font-family:var(--mono);font-size:12px;padding:8px 11px;background:var(--surface-1);
+  border:1px solid var(--hair);border-radius:var(--r-sm);color:var(--ink);
+  width:150px;outline:none;transition:border-color .15s;
+}
+.inp:focus{border-color:var(--accent-line);}
+.inp::placeholder{color:var(--ink-3);}
+.filter-note{font-family:var(--mono);font-size:11px;color:var(--ink-3);margin-top:11px;}
+.filter-note.error{color:var(--danger);}
+
+/* ── Tabs ────────────────────────────────────────────────────────────────── */
+/* Die Kommandoleiste klebt oben. Ohne diesen Abstand landen Elemente, die per
+   Scroll angesteuert werden (Tastaturfokus, Sprungmarken), unter ihr. */
+.tabstrip,.card,.chart-card{scroll-margin-top:96px;}
+.tabstrip{position:relative;display:flex;gap:4px;border-bottom:1px solid var(--hair);margin-bottom:2px;}
+.tab{
+  position:relative;background:none;border:none;cursor:pointer;padding:14px 4px 15px;
+  color:var(--ink-3);font-size:14px;font-weight:600;letter-spacing:-.008em;
+  display:flex;align-items:center;gap:9px;transition:color .18s;
+}
+.tab + .tab{margin-left:26px;}
+.tab:hover{color:var(--ink-2);}
+.tab.active{color:var(--ink);}
+.tab .idx{font-family:var(--mono);font-size:10px;font-weight:700;color:var(--ink-3);
+  letter-spacing:.1em;transition:color .18s;}
+.tab.active .idx{color:var(--accent);}
+.tab-underline{
+  position:absolute;bottom:-1px;height:2px;background:var(--accent);border-radius:2px;
+  transition:transform .32s cubic-bezier(.3,.7,0,1),width .32s cubic-bezier(.3,.7,0,1);
+}
+.viewport{overflow:hidden;touch-action:pan-y;}
+.track{display:flex;align-items:flex-start;will-change:transform;}
+.track.animate{transition:transform .36s cubic-bezier(.3,.7,0,1);}
+.page{flex:0 0 100%;min-width:0;padding-top:26px;}
+.dots{display:flex;justify-content:center;gap:7px;padding:22px 0 4px;}
+.dots span{width:6px;height:6px;border-radius:999px;background:var(--hair-strong);transition:all .25s;}
+.dots span.active{background:var(--accent);width:20px;}
+@media (min-width:760px){.dots{display:none;}}
+
+.range-tag{
+  display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11px;
+  color:var(--ink-3);border:1px solid var(--hair);border-radius:999px;padding:5px 13px;margin-bottom:20px;
+}
+.range-tag b{color:var(--accent);font-weight:700;}
+
+/* ── Bausteine ───────────────────────────────────────────────────────────── */
+.card{background:var(--surface-1);border:1px solid var(--hair);border-radius:var(--r-lg);
+  padding:26px 22px 22px;margin-bottom:16px;}
+.card-head{display:flex;align-items:baseline;gap:12px;margin-bottom:18px;flex-wrap:wrap;}
+.card-head .idx{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--accent);letter-spacing:.1em;}
+.card-head h2{margin:0;font-size:16px;font-weight:700;letter-spacing:-.018em;}
+.card-head .aside{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--ink-3);}
+
+/* Kennzahlen-Raster: Haarlinien statt Kaesten, hohe Zahlenkontraste */
+.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--hair);
+  border:1px solid var(--hair);border-radius:var(--r-md);overflow:hidden;margin-bottom:18px;}
+.metrics.cols-3{grid-template-columns:repeat(3,1fr);}
+.metric{background:var(--surface-1);padding:17px 17px 16px;}
+.metric .label{margin-bottom:10px;}
+.metric .value{font-family:var(--mono);font-size:27px;font-weight:700;line-height:1;
+  letter-spacing:-.03em;font-variant-numeric:tabular-nums;}
+.metric .unit{font-size:13px;font-weight:500;color:var(--ink-3);margin-left:4px;letter-spacing:0;}
+.metric .foot{font-size:11.5px;color:var(--ink-3);margin-top:9px;}
+.metric.solar .value{color:var(--solar);}
+.metric.batt .value{color:var(--batt);}
+.metric.net .value{color:var(--net);}
+.metric.small .value{font-size:20px;}
+@media (max-width:720px){.metrics,.metrics.cols-3{grid-template-columns:repeat(2,1fr);}}
+@media (max-width:400px){.metrics,.metrics.cols-3{grid-template-columns:1fr;}}
+
+.chart-card{background:var(--surface-1);border:1px solid var(--hair);border-radius:var(--r-md);
+  padding:18px 18px 14px;margin-bottom:12px;}
+.chart-card h3{margin:0 0 3px;font-size:13.5px;font-weight:700;letter-spacing:-.012em;}
+.chart-card .cdesc{font-size:11.5px;color:var(--ink-3);margin-bottom:14px;}
+.chart-box{position:relative;height:250px;}
+.chart-box.tall{height:290px;}
+.legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;}
+.legend i{display:flex;align-items:center;gap:7px;font-family:var(--mono);font-size:10.5px;
+  color:var(--ink-3);font-style:normal;}
+.swatch{width:10px;height:10px;border-radius:3px;flex-shrink:0;}
+
+.pill{display:inline-block;font-family:var(--mono);font-size:9.5px;font-weight:700;
+  letter-spacing:.1em;text-transform:uppercase;padding:3px 9px;border-radius:999px;}
+.pill.on{background:var(--ok-bg);color:var(--ok);}
+.pill.off{background:var(--surface-3);color:var(--ink-3);}
+.pill.charge{background:var(--ok-bg);color:var(--ok);}
+.pill.discharge{background:var(--accent-soft);color:var(--accent);}
+.pill.idle{background:var(--surface-3);color:var(--ink-3);}
+
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(152px,1fr));gap:10px;}
+.tile{background:var(--surface-2);border:1px solid var(--hair);border-radius:var(--r-md);
+  padding:13px 14px;position:relative;overflow:hidden;}
+.tile .rail{position:absolute;inset:0 auto 0 0;width:3px;}
+.tile .tname{font-size:11.5px;color:var(--ink-2);margin-bottom:9px;padding-left:7px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.tile .tval{font-family:var(--mono);font-size:19px;font-weight:700;letter-spacing:-.025em;
+  padding-left:7px;font-variant-numeric:tabular-nums;}
+.tile .tval .unit{font-size:11px;color:var(--ink-3);font-weight:500;margin-left:3px;}
+.tile .tfoot{padding-left:7px;margin-top:7px;}
+
+.empty{padding:34px 20px;text-align:center;color:var(--ink-3);font-size:13.5px;
+  border:1px dashed var(--hair-strong);border-radius:var(--r-md);}
+
+/* ── Stromfluss-Diagramm ─────────────────────────────────────────────────── */
+.flow-toggle{display:inline-flex;gap:3px;background:var(--surface-2);border:1px solid var(--hair);
+  border-radius:999px;padding:3px;margin-bottom:20px;}
+.flow-toggle button{font-family:var(--mono);font-size:11.5px;font-weight:600;padding:7px 15px;
+  border-radius:999px;border:none;background:none;color:var(--ink-3);cursor:pointer;transition:all .18s;}
+.flow-toggle button.active{background:var(--accent);color:var(--accent-ink);font-weight:700;}
+.flow-toggle button:not(.active):hover{color:var(--ink-2);}
+
+.stage{position:relative;}
+.stage svg.wires{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible;z-index:1;}
+.cluster{position:relative;z-index:2;}
+.cluster::before{content:'';position:absolute;inset:-6% -4%;z-index:-1;pointer-events:none;
+  background:radial-gradient(ellipse at 50% 56%,var(--hub-glow),transparent 64%);opacity:.5;}
+
+.node{position:absolute;transform:translate(-50%,-50%);background:var(--surface-2);
+  border:1px solid var(--hair);border-radius:var(--r-lg);padding:14px 16px;text-align:center;
+  transition:opacity .3s,left .38s cubic-bezier(.3,.7,0,1),top .38s cubic-bezier(.3,.7,0,1),width .38s;}
+.node .glyph{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;margin:0 auto 9px;}
+.node .nlabel{margin-bottom:6px;}
+.node .nval{font-family:var(--mono);font-size:19px;font-weight:700;line-height:1;
+  letter-spacing:-.028em;font-variant-numeric:tabular-nums;}
+.node .nval .unit{font-size:11px;color:var(--ink-3);font-weight:500;margin-left:2px;}
+.node .nfoot{font-family:var(--mono);font-size:10.5px;color:var(--ink-3);margin-top:6px;
+  font-variant-numeric:tabular-nums;}
+.node.idle{opacity:.42;}
+
+.node.pv{width:108px;}
+.node.pv .glyph{background:var(--accent-soft);color:var(--solar);}
+.node.pv .nval{color:var(--solar);}
+
+.node.grid{width:108px;}
+.node.grid .glyph{background:rgba(232,121,249,.14);color:var(--grid);}
+.node.grid .nval{color:var(--grid);}
+
+.node.hub{
+  width:170px;height:170px;border-radius:46px;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;padding:16px;
+  background:radial-gradient(circle at 34% 26%,#1B2532,#0A0F15 74%);
+  border:1px solid rgba(139,147,255,.22);
+  box-shadow:0 0 0 1px rgba(255,255,255,.03) inset, 0 0 60px -18px var(--hub-glow);
+}
+.node.hub .glyph{width:36px;height:36px;border-radius:11px;background:rgba(139,147,255,.14);color:var(--net);}
+.node.hub .nval{font-size:26px;color:var(--ink);}
+
+.node.batt .glyph{background:rgba(45,212,191,.14);color:var(--batt);}
+.node.batt .nval{color:var(--batt);}
+
+.wire-label{
+  position:absolute;z-index:3;font-family:var(--mono);font-size:10.5px;font-weight:700;
+  background:var(--surface-1);border:1px solid var(--hair);border-radius:999px;padding:3px 9px;
+  white-space:nowrap;transform:translate(-50%,-50%);pointer-events:none;
+  font-variant-numeric:tabular-nums;letter-spacing:-.01em;
+}
+@keyframes wireflow{to{stroke-dashoffset:-12;}}
+@keyframes wireflow-rev{to{stroke-dashoffset:12;}}
+.wire-anim{animation:wireflow .9s linear infinite;}
+.wire-anim-rev{animation:wireflow-rev .9s linear infinite;}
+@media (prefers-reduced-motion:reduce){.wire-anim,.wire-anim-rev{animation:none;}}
+
+.house{position:relative;z-index:2;background:var(--surface-2);border:1px solid var(--hair);
+  border-radius:var(--r-lg);padding:18px 18px 20px;margin-top:70px;}
+.house-top{display:flex;align-items:center;justify-content:space-between;gap:12px;
+  flex-wrap:wrap;margin-bottom:13px;}
+.house-title{display:flex;align-items:center;gap:11px;}
+.house-title .glyph{width:28px;height:28px;border-radius:9px;display:grid;place-items:center;
+  background:rgba(139,147,255,.14);color:var(--net);flex-shrink:0;}
+.house-total{font-family:var(--mono);font-size:21px;font-weight:700;letter-spacing:-.028em;
+  font-variant-numeric:tabular-nums;}
+.house-total .unit{font-size:12px;color:var(--ink-3);font-weight:500;margin-left:3px;}
+.split{display:flex;height:7px;border-radius:999px;overflow:hidden;gap:2px;
+  background:var(--surface-3);margin-bottom:16px;}
+.split span{display:block;height:100%;min-width:3px;border-radius:999px;}
+
+/* ── Info-Layer (nur Tab 1, reduzierbar) ─────────────────────────────────── */
+.infolayer{margin-top:20px;border:1px solid var(--hair);border-radius:var(--r-md);
+  background:var(--surface-2);overflow:hidden;}
+.infolayer-toggle{width:100%;display:flex;align-items:center;gap:9px;background:none;border:none;
+  color:var(--ink-3);cursor:pointer;padding:12px 15px;font-family:var(--mono);font-size:11px;
+  letter-spacing:.1em;text-transform:uppercase;text-align:left;transition:color .15s;}
+.infolayer-toggle:hover{color:var(--ink-2);}
+.infolayer-toggle .ichev{transition:transform .26s cubic-bezier(.3,.7,0,1);display:inline-block;}
+.infolayer.open .ichev{transform:rotate(90deg);}
+.infolayer-body{display:grid;grid-template-rows:0fr;transition:grid-template-rows .28s cubic-bezier(.3,.7,0,1);}
+.infolayer.open .infolayer-body{grid-template-rows:1fr;}
+.infolayer-inner{overflow:hidden;}
+.infolayer-content{padding:2px 16px 18px;border-top:1px solid var(--hair);}
+.info-line{font-family:var(--mono);font-size:11px;color:var(--ink-3);margin:13px 0 14px;line-height:1.7;}
+.info-text{font-size:13px;line-height:1.65;color:var(--ink-2);margin:0 0 10px;}
+.info-text:last-child{margin-bottom:0;}
+.info-text code{font-family:var(--mono);font-size:11.5px;background:var(--surface-3);
+  padding:2px 6px;border-radius:5px;color:var(--ink);}
+
+/* ── Datenqualitaet ──────────────────────────────────────────────────────── */
+.strip{position:relative;height:32px;border-radius:var(--r-sm);overflow:hidden;display:flex;
+  background:var(--surface-3);}
+.strip .seg{position:relative;display:flex;align-items:center;justify-content:center;
+  font-family:var(--mono);font-size:10.5px;color:#04140F;font-weight:700;white-space:nowrap;overflow:hidden;}
+.strip .seg.live{background:linear-gradient(90deg,#1E8A7C,var(--batt));}
+.strip .seg.dead{background:repeating-linear-gradient(135deg,#2A1418,#2A1418 7px,#3A1D22 7px,#3A1D22 14px);
+  color:var(--danger);}
+.strip-scale{display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;
+  color:var(--ink-3);margin-top:8px;}
+.notice{border-radius:var(--r-md);padding:15px 17px;margin-top:16px;border:1px solid var(--hair);
+  border-left:3px solid var(--ink-3);background:var(--surface-2);}
+.notice.ok{border-left-color:var(--ok);background:var(--ok-bg);}
+.notice.warn{border-left-color:var(--danger);background:var(--danger-bg);}
+.notice .ntitle{font-family:var(--mono);font-size:10.5px;font-weight:700;letter-spacing:.12em;
+  text-transform:uppercase;margin-bottom:8px;color:var(--ink-2);}
+.notice.ok .ntitle{color:var(--ok);}
+.notice.warn .ntitle{color:var(--danger);}
+.notice p{margin:0;font-size:13px;line-height:1.65;color:var(--ink-2);}
+.notice code{font-family:var(--mono);font-size:11.5px;background:rgba(0,0,0,.3);
+  padding:2px 6px;border-radius:5px;color:var(--ink);}
+
+/* ── Login ───────────────────────────────────────────────────────────────── */
+#gate{position:fixed;inset:0;z-index:9999;background:var(--bg);display:grid;place-items:center;padding:20px;}
+.gate-box{background:var(--surface-1);border:1px solid var(--hair);border-radius:var(--r-xl);
+  padding:40px 34px;width:100%;max-width:370px;display:flex;flex-direction:column;gap:22px;}
+.gate-box .brand{justify-content:center;}
+.gate-title{margin:0;font-size:20px;font-weight:800;text-align:center;letter-spacing:-.022em;}
+.gate-form{display:flex;flex-direction:column;gap:11px;}
+.gate-inp{font-family:var(--mono);font-size:14px;padding:13px 15px;border-radius:var(--r-md);
+  background:var(--surface-2);border:1px solid var(--hair);color:var(--ink);outline:none;width:100%;}
+.gate-inp:focus{border-color:var(--accent-line);}
+.gate-btn{background:var(--accent);color:var(--accent-ink);border:none;font-weight:700;
+  font-family:var(--mono);font-size:13px;padding:13px;border-radius:var(--r-md);cursor:pointer;width:100%;}
+.gate-btn:hover{filter:brightness(1.09);}
+.gate-err{font-family:var(--mono);font-size:12px;color:var(--danger);text-align:center;
+  min-height:17px;margin:0;}
+
+footer{margin-top:34px;padding-top:18px;border-top:1px solid var(--hair);
+  font-family:var(--mono);font-size:10.5px;color:var(--ink-3);
+  display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;line-height:1.7;}
+
+@media (max-width:640px){
+  .shell{padding:0 14px 60px;}
+  .card{padding:20px 15px 18px;}
+  .masthead{padding:20px 0 16px;}
+  .facet-div{display:none;}
+  .cmd-facets{gap:10px;}
+  .cmd-action{display:none;}
+}
+</style>
+</head>
+<body>
+
+<!-- ══ Archiv-Hinweis (bei der Archivierung ergänzt, sonst unveränderte v4.1.0) ══
+     Ohne diesen Balken wäre die archivierte Version eine Sackgasse: Es gäbe
+     keinen sichtbaren Weg zurück zur aktuellen Fassung. -->
+<style>
+  #archive-bar{position:sticky;top:0;z-index:9998;display:flex;align-items:center;gap:12px;
+    flex-wrap:wrap;padding:9px 18px;background:#1F1608;border-bottom:1px solid #4A3616;
+    font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:12px;color:#F2C97A;}
+  #archive-bar .ab-tag{background:rgba(242,169,59,.18);border:1px solid rgba(242,169,59,.4);
+    color:#F2A93B;border-radius:20px;padding:2px 9px;font-size:10px;font-weight:700;
+    letter-spacing:.08em;text-transform:uppercase;flex-shrink:0;}
+  #archive-bar a{margin-left:auto;color:#1a1208;background:#F2A93B;text-decoration:none;
+    font-weight:600;padding:6px 13px;border-radius:6px;white-space:nowrap;}
+  #archive-bar a:hover{filter:brightness(1.08);}
+  #archive-bar .ab-note{width:100%;color:#C9A268;font-size:11px;line-height:1.5;}
+  @media (max-width:560px){ #archive-bar a{margin-left:0;} }
+</style>
+<div id="archive-bar">
+  <span class="ab-tag">Archiv</span>
+  <span>Du siehst die frühere Version <strong>v4.1.0</strong>. Sie liest dieselben Messdaten und
+    liefert dieselben Energie-Kennzahlen wie die aktuelle Fassung.</span>
+  <a id="backToLatest" href="../../index.html">→ Zur aktuellen Version</a>
+  <span class="ab-note">Bekannte Abweichung dieser Version: Im Leistungsfluss-Diagramm zeigte
+    „Ø Zeitraum" einen über den Filter gemittelten Leistungswert (W) statt der über den Zeitraum
+    kumulierten Energie (Wh/kWh) — irreführend neben der Live-Momentaufnahme. In v4.1.1 korrigiert
+    und in „Σ Zeitraum" umbenannt.</span>
+</div>
+
+<div id="gate">
+  <div class="gate-box">
+    <div class="brand">
+      <div class="brand-mark">
+        <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor"><path d="M8.6 1L3 9.2h4l-1 5.8L13 6.6H9l.6-5.6z"/></svg>
+      </div>
+      <div class="brand-text"><h1>EcoFlow BKW</h1><div class="sub">Dashboard</div></div>
+    </div>
+    <h2 class="gate-title">Zugang</h2>
+    <form class="gate-form" id="gateForm">
+      <input class="gate-inp" type="password" id="gatePw" placeholder="Passwort" autocomplete="current-password">
+      <button class="gate-btn" type="submit">Anmelden</button>
+    </form>
+    <p class="gate-err" id="gateErr"></p>
+  </div>
+</div>
+
+<div class="shell">
+
+  <header class="masthead">
+    <div class="brand">
+      <div class="brand-mark">
+        <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor"><path d="M8.6 1L3 9.2h4l-1 5.8L13 6.6H9l.6-5.6z"/></svg>
+      </div>
+      <div class="brand-text">
+        <h1>PowerStream &amp; Delta 3</h1>
+        <div class="sub">Balkonkraftwerk · Hamburg</div>
+      </div>
+    </div>
+    <div class="masthead-right">
+      <span class="vpill" id="versionPill">v4.0.0</span>
+    </div>
+  </header>
+
+  <!-- Kommandoleiste: Version, Datenaktualisierung und Zeitraum in EINEM Menü -->
+  <section class="command" id="command">
+    <button class="command-bar" id="commandBar" aria-expanded="false" aria-controls="commandPanels">
+      <span class="cmd-chev" aria-hidden="true">
+        <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 2.5L8 6l-3.5 3.5"/></svg>
+      </span>
+      <span class="cmd-facets">
+        <span class="facet">
+          <span class="micro">Version</span>
+          <span class="val accent" id="facetVersion">v4.0.0</span>
+        </span>
+        <span class="facet-div"></span>
+        <span class="facet">
+          <span class="micro">Daten</span>
+          <span class="val" id="facetData"><span class="live-dot" id="facetDot"></span> —</span>
+        </span>
+        <span class="facet-div"></span>
+        <span class="facet">
+          <span class="micro">Zeitraum</span>
+          <span class="val" id="facetRange">—</span>
+        </span>
+      </span>
+      <span class="cmd-action" id="cmdAction">Menü öffnen</span>
+    </button>
+
+    <div class="command-body"><div class="command-body-inner">
+      <div class="command-panels" id="commandPanels">
+
+        <div class="cgroup">
+          <div class="micro cgroup-label">Version</div>
+          <div class="vlist" id="versionList"></div>
+          <div class="vhint">Frühere Versionen lesen dieselben Messdaten und rechnen identisch —
+            bei einem Problem mit der aktuellen Fassung kannst du jederzeit auf eine ältere wechseln
+            und von dort zurück.</div>
+        </div>
+
+        <div class="cgroup">
+          <div class="micro cgroup-label">Datenaktualisierung</div>
+          <div class="refresh-row">
+            <span class="status-text" id="statusText"><span class="live-dot"></span><span>Initialisiere …</span></span>
+            <div class="refresh-actions">
+              <span class="countdown" id="countdown"></span>
+              <button class="btn btn-primary" id="reloadBtn">↻ Neu laden</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="cgroup">
+          <div class="micro cgroup-label">Zeitraum</div>
+          <div class="chips" id="presetChips"></div>
+          <div class="range-row">
+            <input class="inp" id="rangeFrom" placeholder="von · tt.mm.jjjj hh:mm" maxlength="16">
+            <input class="inp" id="rangeTo" placeholder="bis · tt.mm.jjjj hh:mm" maxlength="16">
+            <button class="btn btn-ghost" id="applyRange">Anwenden</button>
+          </div>
+          <div class="filter-note" id="filterNote"></div>
+        </div>
+
+      </div>
+    </div></div>
+  </section>
+
+  <!-- Tabs -->
+  <nav class="tabstrip" id="tabstrip" role="tablist">
+    <button class="tab active" role="tab" data-tab="0"><span class="idx">01</span>Leistungsübersicht</button>
+    <button class="tab" role="tab" data-tab="1"><span class="idx">02</span>Einzelwerte</button>
+    <span class="tab-underline" id="tabUnderline"></span>
+  </nav>
+
+  <div class="viewport" id="viewport">
+    <div class="track" id="track">
+
+      <!-- ══ TAB 01 — Leistungsübersicht ══ -->
+      <section class="page" role="tabpanel" data-tab="0">
+        <div class="range-tag">Zeitraum <b id="rangeTag0">—</b></div>
+
+        <div class="card">
+          <div class="card-head">
+            <span class="idx">01</span><h2>Leistungsfluss</h2>
+            <span class="aside" id="flowAside"></span>
+          </div>
+
+          <div class="flow-toggle" id="flowToggle">
+            <button data-mode="live" class="active">Live-Momentaufnahme</button>
+            <button data-mode="period">Ø Zeitraum</button>
+          </div>
+
+          <div id="flowEmpty" class="empty" hidden>Keine Daten im gewählten Zeitraum.</div>
+
+          <div class="stage" id="stage">
+            <svg class="wires" id="wires" aria-hidden="true"></svg>
+
+            <div class="cluster" id="cluster">
+              <div class="node pv" id="nodePv1">
+                <div class="glyph"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="8" cy="8" r="3"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3 3l1.4 1.4M11.6 11.6L13 13M13 3l-1.4 1.4M4.4 11.6L3 13"/></svg></div>
+                <div class="micro nlabel">PV 1</div>
+                <div class="nval" id="pv1Val">—</div>
+              </div>
+
+              <div class="node pv" id="nodePv2">
+                <div class="glyph"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="8" cy="8" r="3"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3 3l1.4 1.4M11.6 11.6L13 13M13 3l-1.4 1.4M4.4 11.6L3 13"/></svg></div>
+                <div class="micro nlabel">PV 2</div>
+                <div class="nval" id="pv2Val">—</div>
+              </div>
+
+              <div class="node hub" id="nodeHub">
+                <div class="glyph"><svg width="19" height="19" viewBox="0 0 16 16" fill="currentColor"><path d="M8.6 1L3 9.2h4l-1 5.8L13 6.6H9l.6-5.6z"/></svg></div>
+                <div class="micro nlabel">Wechselrichter</div>
+                <div class="nval" id="hubVal">—</div>
+                <div class="nfoot">PV gesamt</div>
+              </div>
+
+              <div class="node batt" id="nodeBatt">
+                <div class="glyph"><svg width="16" height="16" viewBox="0 0 16 16"><rect x="1.3" y="4.2" width="11.4" height="7.6" rx="2" fill="none" stroke="currentColor" stroke-width="1.4"/><rect x="12.9" y="6.6" width="1.6" height="2.8" rx=".6" fill="currentColor"/><rect id="socFill" x="3" y="5.7" width="7.5" height="4.6" rx=".8" fill="currentColor" opacity=".6"/></svg></div>
+                <div class="micro nlabel">Speicher</div>
+                <div class="nval" id="socVal">—</div>
+                <div class="nfoot" id="battWattVal">—</div>
+                <div class="nfoot batt-split" id="battSplit" hidden></div>
+                <div class="pill idle" id="battPill">—</div>
+              </div>
+
+              <div class="node grid" id="nodeGrid">
+                <div class="glyph"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 1v4M4 6h8M2.5 9.3h11M1 12.7h14"/></svg></div>
+                <div class="micro nlabel">Netz</div>
+                <div class="nval" id="gridVal">—</div>
+                <div class="nfoot">nicht vom BKW gedeckt</div>
+              </div>
+            </div>
+
+            <div class="house" id="nodeHouse">
+              <div class="house-top">
+                <div class="house-title">
+                  <div class="glyph"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 8.3L8 3l6 5.3"/><path d="M3.4 7.4V13.3h9.2V7.4"/></svg></div>
+                  <span class="micro">Hausnetz — Gesamtverbrauch</span>
+                </div>
+                <span class="house-total" id="houseTotal">—</span>
+              </div>
+              <div class="split" id="houseSplit"></div>
+              <div class="tiles" id="houseTiles"></div>
+            </div>
+          </div>
+
+          <!-- Hinweise: nur hier, in Tab 01, und standardmäßig reduziert -->
+          <div class="infolayer" id="infolayer">
+            <button class="infolayer-toggle" id="infolayerToggle" aria-expanded="false">
+              <span class="ichev">▸</span> Hinweise zur Leistungsübersicht
+            </button>
+            <div class="infolayer-body"><div class="infolayer-inner">
+              <div class="infolayer-content">
+                <div class="info-line">
+                  ▸▸▸ Bewegte, farbige Striche = aktiver Stromfluss &nbsp;·&nbsp;
+                  blasse, statische Punktlinie = kein Fluss (z. B. PV nachts)
+                </div>
+                <div class="legend" style="margin-bottom:16px;">
+                  <i><span class="swatch" style="background:var(--solar)"></span>PV → Wechselrichter</i>
+                  <i><span class="swatch" style="background:var(--batt)"></span>Wechselrichter ↔ Speicher</i>
+                  <i><span class="swatch" style="background:var(--net)"></span>Wechselrichter → Hausnetz</i>
+                  <i><span class="swatch" style="background:var(--grid)"></span>Netz → Hausnetz</i>
+                  <i><span class="swatch" style="background:var(--base)"></span>Grundbedarf</i>
+                </div>
+                <p class="info-text"><strong>Topologie:</strong> Der Wechselrichter ist der zentrale Knoten des
+                  Balkonkraftwerks. PV1 und PV2 speisen ihn, der Speicher hängt ausschließlich an ihm — nicht am
+                  Hausnetz. Das Hausnetz wird primär über den Wechselrichter versorgt, zusätzlich aber auch direkt
+                  aus dem Stromnetz, sobald PV und Speicher den Bedarf nicht vollständig decken können — z. B. wenn
+                  die Smart Plugs mehr Leistung ziehen, als das Balkonkraftwerk gerade liefert. Dieser Netzbezug
+                  wird als eigener Knoten „Netz" mit eigener Kante ins Hausnetz dargestellt.</p>
+                <p class="info-text"><strong>Vorzeichen Speicher:</strong> <code>battery_power_watt &lt; 0</code>
+                  bedeutet <em>laden</em>, <code>&gt; 0</code> bedeutet <em>entladen</em> (CHANGELOG [3.2.2],
+                  an Messdaten verifiziert). Die Pfeilrichtung folgt dieser Konvention.</p>
+                <p class="info-text"><strong>Live vs. Ø:</strong> „Live" zeigt die zuletzt erfasste Messung,
+                  „Ø Zeitraum" den Durchschnitt über den oben gewählten Zeitraum. Der Zeitraum selbst gilt
+                  für beide Ansichten gleichermaßen.</p>
+              </div>
+            </div></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══ TAB 02 — Einzelwerte ══ -->
+      <section class="page" role="tabpanel" data-tab="1">
+        <div class="range-tag">Zeitraum <b id="rangeTag1">—</b></div>
+
+        <div class="card">
+          <div class="card-head"><span class="idx">01</span><h2>Live-Momentaufnahme</h2>
+            <span class="aside" id="snapshotTime">—</span></div>
+          <div class="metrics" id="snapshotMetrics"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><span class="idx">02</span><h2>Energie</h2>
+            <span class="aside">Erzeugung · Speicher · Verbrauch</span></div>
+          <div class="metrics" id="energyMetrics"></div>
+
+          <div class="chart-card">
+            <h3>PV-Erzeugung — Kanal 1 &amp; 2</h3>
+            <div class="cdesc" id="pvDesc">Ab erstem Nicht-Null-Signal</div>
+            <div class="chart-box tall"><canvas id="chartPv"></canvas></div>
+          </div>
+
+          <div class="chart-card">
+            <h3>Batterie — Ladezustand &amp; Leistung</h3>
+            <div class="cdesc">SOC (%) links · Leistung (W, negativ = lädt) rechts</div>
+            <div class="chart-box"><canvas id="chartBatt"></canvas></div>
+          </div>
+
+          <div class="chart-card">
+            <h3>AC-Hausverbrauch</h3>
+            <div class="cdesc">Wechselrichter-Ausgangsleistung Richtung Haushalt (W)</div>
+            <div class="chart-box"><canvas id="chartAc"></canvas></div>
+          </div>
+
+          <div class="chart-card">
+            <h3>Leistungsfluss — Netz, Steckdose &amp; PV→Wechselrichter</h3>
+            <div class="cdesc">Steckdosen-Ausgang · Dauerleistung · PV→WR · Netzverbrauch (alle in W)</div>
+            <div class="chart-box"><canvas id="chartFlow"></canvas></div>
+          </div>
+
+          <div class="chart-card">
+            <h3>Systemleistung — Überblick</h3>
+            <div class="cdesc">PV-Gesamt · AC-Haus · Batterie (negativ = lädt), alle in W</div>
+            <div class="chart-box"><canvas id="chartSys"></canvas></div>
+          </div>
+
+          <div class="chart-card">
+            <h3>Kumulierte PV-Energie</h3>
+            <div class="cdesc">Aufsummiert über den gewählten Zeitraum (Wh)</div>
+            <div class="chart-box"><canvas id="chartCum"></canvas></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><span class="idx">03</span><h2>Elektrische Spannungen</h2>
+            <span class="aside">Achsen automatisch skaliert</span></div>
+          <div class="metrics cols-3" id="voltMetrics"></div>
+          <div class="chart-card">
+            <h3>Eingangsspannungen PV1 / PV2 &amp; Wechselrichter-Ausgang</h3>
+            <div class="cdesc">PV1/PV2 (V) links · Wechselrichter (V) rechts</div>
+            <div class="chart-box"><canvas id="chartVolt"></canvas></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><span class="idx">04</span><h2>Thermik</h2>
+            <span class="aside">Achsen automatisch skaliert</span></div>
+          <div class="metrics cols-3" id="tempMetrics"></div>
+          <div class="chart-card">
+            <h3>Temperaturen — PV1, PV2 &amp; Wechselrichter</h3>
+            <div class="cdesc">°C — Messpunkte ohne Wert werden als Lücke dargestellt</div>
+            <div class="chart-box"><canvas id="chartTemp"></canvas></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><span class="idx">05</span><h2>System &amp; Konnektivität</h2>
+            <span class="aside">Letzter Messwert</span></div>
+          <div class="metrics" id="sysMetrics"></div>
+        </div>
+
+        <div class="card" id="plugsCard" hidden>
+          <div class="card-head"><span class="idx">06</span><h2>Smart Plugs</h2>
+            <span class="aside" id="plugsAside">—</span></div>
+          <div class="metrics" id="plugsSummary" style="grid-template-columns:1fr;"></div>
+          <div class="tiles" id="plugTiles" style="margin-bottom:14px;"></div>
+          <div class="chart-card">
+            <h3>Leistung je Smart Plug — Zeitverlauf</h3>
+            <div class="cdesc">Watt pro Steckdose, eine Linie je Gerät</div>
+            <div class="chart-box tall"><canvas id="chartPlugs"></canvas></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><span class="idx">07</span><h2>Datenqualität</h2>
+            <span class="aside">Diagnose &amp; Nullwert-Analyse</span></div>
+          <div class="metrics" id="qualityMetrics"></div>
+          <div class="micro" style="margin-bottom:10px;">Aufzeichnungsfenster</div>
+          <div class="strip" id="qualityStrip"></div>
+          <div class="strip-scale" id="qualityScale"><span></span><span></span><span></span></div>
+          <div class="notice" id="qualityNotice"></div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+
+  <div class="dots" id="dots"><span class="active" data-tab="0"></span><span data-tab="1"></span></div>
+
+  <footer>
+    <span id="footSource">Quelle: ecoflow_energie_daten.csv</span>
+    <span id="footCount">— Zeilen</span>
+  </footer>
+</div>
+
+<script type="module">
+import { parseCsv, parseSmartplugsCsv } from './lib/csv.mjs';
+import { fmtLabel, fmtW, fmtEnergy, fmtMeasure, fmtCount, rssiQuality } from './lib/format.mjs';
+import { cumulativeEnergyWh, pvTotal } from './lib/energy.mjs';
+import { PRESETS, parseDEDate } from './lib/filters.mjs';
+import { initialState, buildViewModel } from './lib/viewmodel.mjs';
+import {
+  computeLayout, strokeWidthFor, pickAnchorSides, arrowGlyph,
+  pointOnCubic, edgeControlPoints,
+} from './lib/layout.mjs';
+
+/* ── Konfiguration ─────────────────────────────────────────────────────── */
+const DASHBOARD_VERSION = 'v4.1.0';
+const CSV_PATH = '../../../ecoflow_energie_daten.csv';
+const SMARTPLUGS_CSV_PATH = '../../../ecoflow_smartplugs_daten.csv';
+const VERSIONS_MANIFEST = '../manifest.json';
+const REFRESH_SECONDS = 30;
+
+const C = {
+  solar: '#FFB020', solarAlt: '#FFD48A',
+  batt: '#2DD4BF', net: '#8B93FF', base: '#FF5D8F', grid: '#E879F9',
+  neutral: '#F5F7FA', ink3: '#63748A', hair: '#1D2731',
+  idle: '#3E4C5C',
+};
+
+/* ── Zustand ───────────────────────────────────────────────────────────── */
+const state = initialState();
+let allRows = [];
+let allPlugRows = [];
+let vm = null;
+let charts = {};
+let countdown = REFRESH_SECONDS;
+let lastLoadTime = 0;
+
+const $ = (id) => document.getElementById(id);
+
+/* ── Kommandoleiste ────────────────────────────────────────────────────── */
+function toggleCommand(force) {
+  const c = $('command');
+  const open = force !== undefined ? force : !c.classList.contains('open');
+  c.classList.toggle('open', open);
+  $('commandBar').setAttribute('aria-expanded', String(open));
+  $('cmdAction').textContent = open ? 'Menü schließen' : 'Menü öffnen';
+}
+$('commandBar').addEventListener('click', () => toggleCommand());
+
+$('presetChips').innerHTML = PRESETS
+  .map((p) => `<button class="chip${p.key === state.preset ? ' active' : ''}" data-preset="${p.key}">${p.label}</button>`)
+  .join('');
+$('presetChips').addEventListener('click', (e) => {
+  const btn = e.target.closest('.chip');
+  if (!btn) return;
+  state.preset = btn.dataset.preset;
+  state.from = null;
+  state.to = null;
+  document.querySelectorAll('#presetChips .chip')
+    .forEach((b) => b.classList.toggle('active', b.dataset.preset === state.preset));
+  $('filterNote').className = 'filter-note';
+  render();
+  // Nach der Auswahl zuklappen: das aufgeklappte Menue verdeckt sonst genau
+  // die Auswertung, die man gerade angefordert hat.
+  toggleCommand(false);
+});
+
+$('applyRange').addEventListener('click', () => {
+  const note = $('filterNote');
+  const fv = $('rangeFrom').value.trim();
+  const tv = $('rangeTo').value.trim();
+  const from = fv ? parseDEDate(fv) : null;
+  const to = tv ? parseDEDate(tv) : null;
+  if (fv && !from) { note.className = 'filter-note error'; note.textContent = 'Von-Datum unlesbar — erwartet wird tt.mm.jjjj hh:mm'; return; }
+  if (tv && !to) { note.className = 'filter-note error'; note.textContent = 'Bis-Datum unlesbar — erwartet wird tt.mm.jjjj hh:mm'; return; }
+  if (!from && !to) { note.className = 'filter-note error'; note.textContent = 'Bitte mindestens ein Datum angeben.'; return; }
+  note.className = 'filter-note';
+  state.preset = 'custom';
+  state.from = from;
+  state.to = to;
+  document.querySelectorAll('#presetChips .chip').forEach((b) => b.classList.remove('active'));
+  render();
+  toggleCommand(false);
+});
+
+$('reloadBtn').addEventListener('click', () => { loadData(); countdown = REFRESH_SECONDS; });
+
+/* ── Versionsliste aus dem Manifest ────────────────────────────────────── */
+async function loadVersions() {
+  const list = $('versionList');
+  try {
+    const res = await fetch(VERSIONS_MANIFEST, { cache: 'no-store' });
+    if (!res.ok) throw new Error(String(res.status));
+    const data = await res.json();
+    list.innerHTML = data.versions.map((v) => {
+      const inner = `<span class="vtag">v${v.version}</span> <span class="vtitle">${v.title}</span>`;
+      const date = `<span class="vdate">${v.date}${v.current ? ' · aktuell' : ''}</span>`;
+      return v.current || !v.path
+        ? `<div class="vitem${v.current ? ' current' : ''}"><span>${inner}</span>${date}</div>`
+        // Archiv-Kopie liegt zwei Ebenen tiefer als das Manifest (docs/dashboard/versions/vX.Y.Z/) —
+        // v.path ist relativ zu docs/dashboard/, daher hier um "../../" verlaengert.
+        : `<a class="vitem" href="../../${v.path}">${`<span>${inner}</span>`}${date}</a>`;
+    }).join('');
+  } catch {
+    list.innerHTML = '<div class="vitem"><span class="vtitle">Versionsliste nicht verfügbar</span></div>';
+  }
+}
+
+/* ── Tabs: Reiter, Wischen, Indikator ──────────────────────────────────── */
+function moveUnderline() {
+  const active = document.querySelector(`.tab[data-tab="${state.tab}"]`);
+  const strip = $('tabstrip');
+  if (!active) return;
+  const u = $('tabUnderline');
+  u.style.width = `${active.offsetWidth}px`;
+  u.style.transform = `translateX(${active.offsetLeft - strip.scrollLeft}px)`;
+}
+function goToTab(i, animate = true) {
+  state.tab = Math.max(0, Math.min(1, i));
+  const t = $('track');
+  t.classList.toggle('animate', animate);
+  t.style.transform = `translateX(-${state.tab * 100}%)`;
+  document.querySelectorAll('.tab').forEach((b) => b.classList.toggle('active', +b.dataset.tab === state.tab));
+  document.querySelectorAll('#dots span').forEach((d) => d.classList.toggle('active', +d.dataset.tab === state.tab));
+  moveUnderline();
+  // Das Flussdiagramm misst DOM-Groessen; nach dem Einblenden neu vermessen.
+  if (state.tab === 0) requestAnimationFrame(drawWires);
+}
+$('tabstrip').addEventListener('click', (e) => {
+  const btn = e.target.closest('.tab');
+  if (btn) goToTab(+btn.dataset.tab);
+});
+$('dots').addEventListener('click', (e) => {
+  if (e.target.dataset.tab !== undefined) goToTab(+e.target.dataset.tab);
+});
+
+(function enableSwipe() {
+  const vp = $('viewport');
+  let startX = 0, startY = 0, dragging = false, decided = false, horizontal = false, w = 0;
+  vp.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    startX = e.clientX; startY = e.clientY;
+    dragging = true; decided = false; horizontal = false;
+    w = vp.getBoundingClientRect().width;
+    $('track').classList.remove('animate');
+  });
+  vp.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+    if (!decided) {
+      if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+      decided = true;
+      // Vertikales Scrollen hat Vorrang, damit die Seite bedienbar bleibt.
+      horizontal = Math.abs(dx) > Math.abs(dy);
+      if (horizontal) vp.setPointerCapture(e.pointerId);
+    }
+    if (!horizontal) return;
+    const base = -state.tab * w;
+    const next = Math.max(-w, Math.min(0, base + dx));
+    $('track').style.transform = `translateX(${next}px)`;
+  });
+  const finish = (e) => {
+    if (!dragging) return;
+    dragging = false;
+    if (!decided || !horizontal) return;
+    const dx = e.clientX - startX;
+    goToTab(Math.abs(dx) > w * 0.18 ? state.tab + (dx < 0 ? 1 : -1) : state.tab);
+  };
+  vp.addEventListener('pointerup', finish);
+  vp.addEventListener('pointercancel', finish);
+})();
+
+$('infolayerToggle').addEventListener('click', () => {
+  const l = $('infolayer');
+  const open = !l.classList.contains('open');
+  l.classList.toggle('open', open);
+  $('infolayerToggle').setAttribute('aria-expanded', String(open));
+});
+
+/* ── Rendering ─────────────────────────────────────────────────────────── */
+function render() {
+  if (!allRows.length) return;
+  vm = buildViewModel(allRows, allPlugRows, state, new Date());
+
+  $('facetRange').textContent = vm.rangeLabel;
+  $('rangeTag0').textContent = vm.rangeLabel;
+  $('rangeTag1').textContent = vm.rangeLabel;
+
+  const note = $('filterNote');
+  if (!note.classList.contains('error')) {
+    note.textContent = vm.empty
+      ? 'Keine Messwerte im gewählten Zeitraum.'
+      : `${fmtCount(vm.filtered.length)} Messwerte · ${fmtLabel(vm.filtered[0].t)} – ${fmtLabel(vm.filtered[vm.filtered.length - 1].t)}`
+        + (vm.granularity === 'raw' ? '' : ` · Darstellung als ${vm.granularity === 'hour' ? 'Stunden' : 'Tages'}mittel`);
+  }
+
+  renderFlow();
+  renderDetails();
+
+  $('footSource').textContent = `Quelle: ${CSV_PATH} · Dashboard ${DASHBOARD_VERSION}`;
+  $('footCount').textContent = `${fmtCount(vm.filtered.length)} von ${fmtCount(allRows.length)} Zeilen`;
+}
+
+/* ── Tab 01: Stromfluss ────────────────────────────────────────────────── */
+$('flowToggle').addEventListener('click', (e) => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  state.flowMode = btn.dataset.mode;
+  document.querySelectorAll('#flowToggle button')
+    .forEach((b) => b.classList.toggle('active', b.dataset.mode === state.flowMode));
+  render();
+});
+
+function renderFlow() {
+  const hasFlow = !!vm.flow;
+  $('stage').hidden = !hasFlow;
+  $('flowEmpty').hidden = hasFlow;
+  if (!hasFlow) { $('flowAside').textContent = ''; return; }
+
+  const f = vm.flow;
+  $('flowAside').textContent = state.flowMode === 'live'
+    ? `Stand ${fmtLabel(vm.lastRow.t)} Uhr`
+    : `Ø aus ${fmtCount(vm.filtered.length)} Messwerten`;
+
+  $('pv1Val').innerHTML = `${fmtW(f.pv1)}<span class="unit">W</span>`;
+  $('pv2Val').innerHTML = `${fmtW(f.pv2)}<span class="unit">W</span>`;
+  $('nodePv1').classList.toggle('idle', f.pv1 <= 0);
+  $('nodePv2').classList.toggle('idle', f.pv2 <= 0);
+  $('hubVal').innerHTML = `${fmtW(f.pvTotal)}<span class="unit">W</span>`;
+  $('socVal').innerHTML = `${fmtW(f.soc)}<span class="unit">%</span>`;
+  $('battWattVal').textContent = `${f.charging ? '−' : '+'}${fmtW(f.batteryMagnitude)} W`;
+  $('socFill').setAttribute('width', Math.max(0.4, (f.soc / 100) * 7.5).toFixed(2));
+
+  const pill = $('battPill');
+  pill.className = `pill ${f.batteryState === 'lädt' ? 'charge' : f.batteryState === 'entlädt' ? 'discharge' : 'idle'}`;
+  pill.textContent = f.batteryState;
+
+  // Im Ø-Modus verrechnet der Mittelwert Laden und Entladen zu einer Zahl.
+  // Kamen beide Richtungen vor, werden sie zusaetzlich getrennt ausgewiesen —
+  // sonst sähe ein Zeitraum mit viel Umsatz in beide Richtungen aus wie
+  // Stillstand.
+  const split = $('battSplit');
+  const showSplit = state.flowMode === 'period' && vm.battery.bidirectional;
+  split.hidden = !showSplit;
+  if (showSplit) {
+    split.innerHTML = `<span style="color:var(--batt)">↓ ${fmtW(vm.battery.meanCharge)}</span>`
+      + ` <span style="color:var(--ink3)">·</span> `
+      + `<span style="color:var(--accent)">↑ ${fmtW(vm.battery.meanDischarge)} W</span>`;
+    split.title = `Ø Ladeleistung ${fmtW(vm.battery.meanCharge)} W, Ø Entladeleistung ${fmtW(vm.battery.meanDischarge)} W `
+      + `— netto ${fmtW(Math.abs(vm.battery.net))} W ${vm.battery.net < 0 ? 'ins Speichern' : 'aus dem Speicher'}`;
+  }
+
+  $('gridVal').innerHTML = `${fmtW(f.gridConsumption)}<span class="unit">W</span>`;
+  $('nodeGrid').classList.toggle('idle', f.gridConsumption <= 0.5);
+
+  // Gesamtverbrauch = was der Wechselrichter liefert PLUS was zusaetzlich aus
+  // dem Netz bezogen wird, weil das Balkonkraftwerk (PV/Speicher) den Bedarf
+  // (z. B. der Smart Plugs) nicht allein decken kann.
+  $('houseTotal').innerHTML = `${fmtW(f.house + f.gridConsumption)}<span class="unit">W</span>`;
+
+  const bd = vm.houseBreakdown;
+  const colorOf = (item) => {
+    if (item.kind === 'plug') return vm.plugs.latest.find((p) => `plug:${p.plug_sn}` === item.key)?.color || C.net;
+    if (item.kind === 'base') return C.base;
+    if (item.kind === 'grid') return C.grid;
+    return C.idle;
+  };
+  $('houseSplit').innerHTML = bd.items
+    .map((i) => `<span style="width:${(i.share * 100).toFixed(2)}%;background:${colorOf(i)}"></span>`).join('');
+  $('houseTiles').innerHTML = bd.items.map((i) => `
+    <div class="tile">
+      <span class="rail" style="background:${colorOf(i)}"></span>
+      <div class="tname" title="${escapeHtml(i.name)}">${escapeHtml(i.name)}</div>
+      <div class="tval">${fmtW(i.watts)}<span class="unit">W</span></div>
+      <div class="tfoot micro">${(i.share * 100).toFixed(0)} % v. Hausnetz</div>
+    </div>`).join('');
+
+  layoutNodes();
+  requestAnimationFrame(drawWires);
+}
+
+function layoutNodes() {
+  const cluster = $('cluster');
+  const L = computeLayout(cluster.clientWidth);
+  const put = (el, p) => { el.style.left = `${p.x}px`; el.style.top = `${p.y}px`; };
+  $('nodeHub').style.width = $('nodeHub').style.height = `${L.sizes.hub}px`;
+  $('nodeBatt').style.width = `${L.sizes.batt}px`;
+  cluster.style.height = `${L.height}px`;
+  put($('nodePv1'), L.pv1); put($('nodePv2'), L.pv2);
+  put($('nodeHub'), L.hub); put($('nodeBatt'), L.batt);
+  put($('nodeGrid'), L.grid);
+}
+
+function drawWires() {
+  if (!vm || !vm.flow || state.tab !== 0) return;
+  const stage = $('stage');
+  const svg = $('wires');
+  const box = stage.getBoundingClientRect();
+  if (!box.width) return;
+  svg.setAttribute('viewBox', `0 0 ${box.width} ${box.height}`);
+  svg.innerHTML = '';
+  stage.querySelectorAll('.wire-label').forEach((n) => n.remove());
+
+  const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+  svg.appendChild(defs);
+
+  const anchor = (el, side) => {
+    const r = el.getBoundingClientRect();
+    const x = r.left - box.left, y = r.top - box.top;
+    if (side === 'top') return { x: x + r.width / 2, y };
+    if (side === 'bottom') return { x: x + r.width / 2, y: y + r.height };
+    if (side === 'left') return { x, y: y + r.height / 2 };
+    return { x: x + r.width, y: y + r.height / 2 };
+  };
+  const rectOf = (el) => {
+    const r = el.getBoundingClientRect();
+    return { left: r.left, right: r.right, top: r.top, bottom: r.bottom, height: r.height };
+  };
+
+  let uid = 0;
+  const gradient = (a, b, from, to) => {
+    const id = `wg${uid++}`;
+    const g = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
+    g.setAttribute('id', id);
+    g.setAttribute('gradientUnits', 'userSpaceOnUse');
+    g.setAttribute('x1', a.x); g.setAttribute('y1', a.y);
+    g.setAttribute('x2', b.x); g.setAttribute('y2', b.y);
+    for (const [off, col] of [['0%', from], ['100%', to]]) {
+      const s = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+      s.setAttribute('offset', off); s.setAttribute('stop-color', col);
+      g.appendChild(s);
+    }
+    defs.appendChild(g);
+    return `url(#${id})`;
+  };
+  const arrow = (color, dim) => {
+    const id = `wa${uid++}`;
+    const m = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
+    m.setAttribute('id', id);
+    m.setAttribute('markerUnits', 'userSpaceOnUse');
+    m.setAttribute('markerWidth', '7'); m.setAttribute('markerHeight', '7');
+    m.setAttribute('refX', '5.6'); m.setAttribute('refY', '3');
+    m.setAttribute('orient', 'auto');
+    const tri = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    tri.setAttribute('d', 'M0,0.4 L5.6,3 L0,5.6 Z');
+    tri.setAttribute('fill', color);
+    tri.setAttribute('fill-opacity', dim ? '0.45' : '1');
+    m.appendChild(tri); defs.appendChild(m);
+    return `url(#${id})`;
+  };
+
+  function wire(a, b, c1, c2, color, watt, active, reverse) {
+    const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    p.setAttribute('d', `M ${a.x} ${a.y} C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${b.x} ${b.y}`);
+    p.setAttribute('fill', 'none');
+    p.setAttribute('stroke-linecap', 'round');
+    p.setAttribute('stroke', active ? gradient(a, b, color, C.net) : C.idle);
+    p.setAttribute('stroke-width', strokeWidthFor(watt));
+    // Zustand steckt in Muster UND Farbe, nicht nur in der Bewegung —
+    // damit er auch bei reduzierter Bewegung und im Screenshot lesbar bleibt.
+    p.setAttribute('stroke-dasharray', active ? '6 6' : '1 7');
+    p.setAttribute('opacity', active ? '0.95' : '0.4');
+    p.setAttribute('marker-end', arrow(active ? color : C.idle, !active));
+    if (active) p.setAttribute('class', reverse ? 'wire-anim-rev' : 'wire-anim');
+    svg.appendChild(p);
+
+    const mid = pointOnCubic(a, c1, c2, b, 0.5);
+    const label = document.createElement('div');
+    label.className = 'wire-label';
+    label.style.left = `${mid.x}px`;
+    label.style.top = `${mid.y}px`;
+    label.style.color = active ? color : C.ink3;
+    label.textContent = `${active ? arrowGlyph(a, b) : '·'} ${fmtW(watt)} W`;
+    stage.appendChild(label);
+  }
+
+  const f = vm.flow;
+  const hubEl = $('nodeHub');
+  const hubTop = anchor(hubEl, 'top');
+  const hubBottom = anchor(hubEl, 'bottom');
+  const offset = Math.max(18, hubEl.offsetWidth * 0.15);
+
+  // PV1 / PV2 -> Wechselrichter
+  for (const [el, target, watt] of [
+    [$('nodePv1'), { x: hubTop.x - offset, y: hubTop.y }, f.pv1],
+    [$('nodePv2'), { x: hubTop.x + offset, y: hubTop.y }, f.pv2],
+  ]) {
+    const a = anchor(el, 'bottom');
+    const midY = a.y + (target.y - a.y) * 0.55;
+    wire(a, target, { x: a.x, y: midY }, { x: target.x, y: midY }, C.solar, watt, watt > 0.5, false);
+  }
+
+  // Wechselrichter <-> Speicher (Richtung folgt dem Vorzeichen)
+  const battEl = $('nodeBatt');
+  const [sideA, sideB] = f.charging
+    ? pickAnchorSides(rectOf(hubEl), rectOf(battEl))
+    : pickAnchorSides(rectOf(battEl), rectOf(hubEl));
+  const bA = anchor(f.charging ? hubEl : battEl, sideA);
+  const bB = anchor(f.charging ? battEl : hubEl, sideB);
+  const [bc1, bc2] = edgeControlPoints(bA, bB);
+  wire(bA, bB, bc1, bc2, C.batt, f.batteryMagnitude, f.batteryMagnitude > 0.5, !f.charging);
+
+  // Wechselrichter -> Hausnetz UND Netz -> Hausnetz: zwei unabhaengige
+  // Quellen, beide versetzt vom Zentrum, damit keine Linie die andere
+  // verdeckt (gleiches Muster wie PV1/PV2 -> Wechselrichter oben).
+  const houseTop = anchor($('nodeHouse'), 'top');
+  const houseOffset = Math.max(24, $('nodeHouse').offsetWidth * 0.08);
+
+  const hubTarget = { x: houseTop.x + houseOffset, y: houseTop.y };
+  const hMid = hubBottom.y + (hubTarget.y - hubBottom.y) * 0.5;
+  wire(hubBottom, hubTarget, { x: hubBottom.x, y: hMid }, { x: hubTarget.x, y: hMid },
+    C.net, f.house, f.house > 0.5, false);
+
+  const gridEl = $('nodeGrid');
+  const gridBottom = anchor(gridEl, 'bottom');
+  const gridTarget = { x: houseTop.x - houseOffset, y: houseTop.y };
+  const gMid = gridBottom.y + (gridTarget.y - gridBottom.y) * 0.55;
+  wire(gridBottom, gridTarget, { x: gridBottom.x, y: gMid }, { x: gridTarget.x, y: gMid },
+    C.grid, f.gridConsumption, f.gridConsumption > 0.5, false);
+}
+
+/* ── Tab 02: Einzelwerte ───────────────────────────────────────────────── */
+function metric(cls, label, value, unit, foot) {
+  return `<div class="metric ${cls}">
+    <div class="micro label">${label}</div>
+    <div class="value">${value}${unit ? `<span class="unit">${unit}</span>` : ''}</div>
+    ${foot ? `<div class="foot">${foot}</div>` : ''}
+  </div>`;
+}
+
+function renderDetails() {
+  const last = vm.lastRow;
+
+  if (!last) {
+    $('snapshotMetrics').innerHTML = `<div class="metric">${'<div class="micro label">Keine Daten</div>'}</div>`;
+    $('snapshotTime').textContent = '—';
+  } else {
+    // Die Momentaufnahme zeigt immer die letzte Messung, unabhaengig vom
+    // Ansichtsmodus des Flussdiagramms. Vorzeichen nach der verifizierten
+    // Konvention: negativ = laden.
+    const chg = last.battery_power_watt < 0;
+    const mag = Math.abs(last.battery_power_watt);
+    $('snapshotTime').textContent = `Stand ${fmtLabel(last.t)} Uhr`;
+    $('snapshotMetrics').innerHTML =
+      metric('solar', 'PV-Erzeugung', fmtW(pvTotal(last)), 'W', `PV1 ${fmtW(last.pv1_watt)} W · PV2 ${fmtW(last.pv2_watt)} W`)
+      + metric('', 'AC-Hausverbrauch', fmtW(last.ac_house_watt), 'W', 'Wechselrichter → Haushalt')
+      + metric('batt', 'Ladezustand', fmtW(last.battery_soc_percent), '%',
+        Number.isNaN(last.bat_lower_limit) ? 'Limits —' : `Limits ${fmtW(last.bat_lower_limit)}–${fmtW(last.bat_upper_limit)} %`)
+      + metric(chg ? 'batt' : 'solar', 'Batterie-Leistung', `${chg ? '−' : '+'}${fmtW(mag)}`, 'W',
+        chg ? 'lädt' : mag > 0 ? 'entlädt' : 'inaktiv');
+  }
+
+  const e = vm.energy;
+  const p = vm.presetLabel;
+  const en = (wh) => { const f = fmtEnergy(wh); return { v: f.value, u: f.unit }; };
+  const prod = en(e.productionWh), cons = en(e.consumptionWh);
+  const bout = en(e.batteryOutWh), feed = en(e.feedInWh);
+  $('energyMetrics').innerHTML =
+    metric('solar', `Erzeugung ${p}`, prod.v, prod.u, 'PV1 + PV2, zeitgewichtet')
+    + metric('', `Verbrauch ${p}`, cons.v, cons.u, 'Smart Plugs + Grundbedarf')
+    + metric('batt', `Aus Speicher ${p}`, bout.v, bout.u, 'nur Entladung')
+    + metric('net', `Einspeisung ${p}`, feed.v, feed.u, 'Überschuss ins Netz');
+
+  const rows = vm.display;
+  const valid = rows.slice(vm.quality.validFromIdx);
+  const labels = valid.map((r) => fmtLabel(r.t));
+
+  const firstPv = rows.findIndex((r) => r.pv1_watt > 0 || r.pv2_watt > 0);
+  const pvRows = firstPv >= 0 ? rows.slice(firstPv) : [];
+  $('pvDesc').textContent = pvRows.length
+    ? `Ab erstem PV-Signal: ${fmtLabel(pvRows[0].t)} Uhr`
+    : 'Kein PV-Signal > 0 im gewählten Zeitraum';
+
+  destroyCharts();
+  if (!valid.length) return;
+
+  line('chartPv', pvRows.map((r) => fmtLabel(r.t)), [
+    ds('PV1 (W)', pvRows.map((r) => r.pv1_watt), C.solar, { fill: true }),
+    ds('PV2 (W)', pvRows.map((r) => r.pv2_watt), C.solarAlt),
+    ds('Gesamt (W)', pvRows.map((r) => pvTotal(r)), C.neutral, { dash: [4, 3] }),
+  ], { yTitle: 'Watt', beginAtZero: true });
+
+  line('chartBatt', labels, [
+    ds('SOC (%)', valid.map((r) => r.battery_soc_percent), C.batt, { fill: true }),
+    ds('Batterieleistung (W)', valid.map((r) => r.battery_power_watt), C.solar, { dash: [3, 2], axis: 'y2' }),
+  ], { yTitle: 'SOC %', y2Title: 'Watt', yMin: 0, yMax: 100 });
+
+  line('chartAc', labels, [
+    ds('AC-Hausverbrauch (W)', valid.map((r) => r.ac_house_watt), C.neutral, { fill: true }),
+  ], { yTitle: 'Watt', beginAtZero: true, legend: false });
+
+  line('chartFlow', labels, [
+    ds('Steckdose (W)', valid.map((r) => nn(r.inv_to_plug_watt)), C.batt, { dash: [3, 2] }),
+    ds('PV→WR (W)', valid.map((r) => nn(r.pv_to_inv_watt)), C.solar),
+    ds('Dauerleistung (W)', valid.map((r) => nn(r.permanent_watt)), C.base, { dash: [6, 3] }),
+    ds('Netzverbrauch (W)', valid.map((r) => { const v = nn(r.grid_cons_watt); return v === null ? null : Math.max(0, v); }), C.net),
+  ], { yTitle: 'Watt', beginAtZero: true });
+
+  line('chartSys', labels, [
+    ds('PV Gesamt (W)', valid.map((r) => pvTotal(r)), C.solar, { fill: true }),
+    ds('AC-Haus (W)', valid.map((r) => r.ac_house_watt), C.neutral),
+    ds('Batterie (W)', valid.map((r) => r.battery_power_watt), C.batt, { dash: [3, 2] }),
+  ], { yTitle: 'Watt' });
+
+  line('chartCum', pvRows.map((r) => fmtLabel(r.t)),
+    [ds('PV kumuliert (Wh)', cumulativeEnergyWh(pvRows, pvTotal), C.batt, { fill: true })],
+    { yTitle: 'Wh', beginAtZero: true, legend: false });
+
+  $('voltMetrics').innerHTML =
+    metric('small', 'PV1 Spannung', fmtMeasure(last?.pv1_volt, 'V'), '')
+    + metric('small', 'PV2 Spannung', fmtMeasure(last?.pv2_volt, 'V'), '')
+    + metric('small', 'WR Ausgangsspannung', fmtMeasure(last?.inv_volt, 'V'), '');
+  line('chartVolt', labels, [
+    ds('PV1 (V)', valid.map((r) => pos(r.pv1_volt)), C.net, { fill: true }),
+    ds('PV2 (V)', valid.map((r) => pos(r.pv2_volt)), '#B9BEFF'),
+    ds('WR-Ausgang (V)', valid.map((r) => pos(r.inv_volt)), C.base, { dash: [4, 3], axis: 'y2' }),
+  ], { yTitle: 'PV (V)', y2Title: 'WR (V)' });
+
+  $('tempMetrics').innerHTML =
+    metric('small', 'PV1 Temperatur', fmtMeasure(last?.pv1_temp_c, '°C'), '')
+    + metric('small', 'PV2 Temperatur', fmtMeasure(last?.pv2_temp_c, '°C'), '')
+    + metric('small', 'WR Temperatur', fmtMeasure(last?.inv_temp_c, '°C'), '');
+  line('chartTemp', labels, [
+    ds('PV1 (°C)', valid.map((r) => pos(r.pv1_temp_c)), C.base, { fill: true }),
+    ds('PV2 (°C)', valid.map((r) => pos(r.pv2_temp_c)), '#FFA3BE', { dash: [3, 2] }),
+    ds('WR (°C)', valid.map((r) => pos(r.inv_temp_c)), C.solar),
+  ], { yTitle: '°C' });
+
+  const rssi = last?.wifi_rssi;
+  $('sysMetrics').innerHTML =
+    metric('small', 'WLAN-Signal', fmtMeasure(rssi, 'dBm'), '')
+    + metric('small', 'Signalqualität', rssiQuality(rssi), '')
+    + metric('small batt', 'Limit unten', fmtMeasure(last?.bat_lower_limit, '%'), '')
+    + metric('small batt', 'Limit oben', fmtMeasure(last?.bat_upper_limit, '%'), '');
+
+  renderPlugs();
+  renderQuality();
+}
+
+function renderPlugs() {
+  const card = $('plugsCard');
+  const groups = vm.plugs.groups;
+  card.hidden = groups.length === 0;
+  if (!groups.length) return;
+
+  const s = vm.plugs.summary;
+  $('plugsAside').textContent = `Stand ${fmtLabel(groups[0].last.t)} Uhr`;
+  $('plugsSummary').innerHTML = metric('solar', 'Gesamtverbrauch Smart Plugs', fmtW(s.totalWatts), 'W',
+    `${s.count} Plug${s.count === 1 ? '' : 's'} · ${s.onCount} an, ${s.offCount} aus`);
+  $('plugTiles').innerHTML = groups.map((g) => `
+    <div class="tile">
+      <span class="rail" style="background:${g.color}"></span>
+      <div class="tname" title="${escapeHtml(g.name)}">${escapeHtml(g.name)}</div>
+      <div class="tval">${fmtW(g.last.watts)}<span class="unit">W</span></div>
+      <div class="tfoot"><span class="pill ${g.last.switch_sta > 0 ? 'on' : 'off'}">${g.last.switch_sta > 0 ? 'An' : 'Aus'}</span></div>
+    </div>`).join('');
+
+  const stamps = [...new Set(vm.displayPlugs.map((r) => r.t))].sort();
+  line('chartPlugs', stamps.map(fmtLabel), groups.map((g) => {
+    const byT = new Map(g.rows.map((r) => [r.t, r.watts]));
+    return ds(g.name, stamps.map((t) => (byT.has(t) ? byT.get(t) : null)), g.color);
+  }), { yTitle: 'Watt', beginAtZero: true });
+}
+
+function renderQuality() {
+  const q = vm.quality;
+  $('qualityMetrics').innerHTML =
+    metric('small', 'Zeilen im Zeitraum', fmtCount(q.total), '')
+    + metric('small', 'Nullwert-Zeilen', fmtCount(q.zeroCount), '',
+      q.zeroCount > 0 ? `≈ ${q.deadHours.toFixed(1)} h ohne Werte` : 'keine erkannt')
+    + metric('small batt', 'Datenabdeckung', q.coverage.toFixed(1), '%', 'valide / gesamt')
+    + metric('small', 'Aufzeichnungsdauer', q.durationHours.toFixed(1), 'h', 'erste bis letzte Messung');
+
+  const strip = $('qualityStrip');
+  if (q.zeroCount > 0 && q.durationHours > 0) {
+    const deadPct = Math.min(100, (q.deadHours / q.durationHours) * 100);
+    strip.innerHTML = `<div class="seg dead" style="width:${deadPct}%">${deadPct > 18 ? `keine Daten (${q.deadHours.toFixed(1)} h)` : ''}</div>`
+      + `<div class="seg live" style="width:${100 - deadPct}%">valide Daten (${(q.durationHours - q.deadHours).toFixed(1)} h)</div>`;
+  } else {
+    strip.innerHTML = '<div class="seg live" style="width:100%">durchgehend valide Messwerte</div>';
+  }
+
+  const rows = vm.display;
+  $('qualityScale').innerHTML = rows.length
+    ? `<span>${fmtLabel(rows[0].t)}</span><span>${fmtLabel(rows[Math.floor(rows.length / 2)].t)}</span><span>${fmtLabel(rows[rows.length - 1].t)}</span>`
+    : '<span></span><span></span><span></span>';
+
+  const n = $('qualityNotice');
+  if (q.zeroCount > 0) {
+    n.className = 'notice warn';
+    n.innerHTML = `<div class="ntitle">Nullwert-Phase zu Beginn</div>
+      <p>Die ersten <code>${q.zeroCount}</code> Messungen (≈ ${q.deadHours.toFixed(1)} h) enthalten ausschließlich
+      Nullwerte — die EcoFlow-API lieferte dort leere Antworten. Alle Diagramme beginnen erst ab dem ersten
+      validen Messwert.</p>`;
+  } else {
+    n.className = 'notice ok';
+    n.innerHTML = `<div class="ntitle">Keine Nullwert-Phase</div>
+      <p>Alle ${fmtCount(q.total)} Messungen im gewählten Zeitraum enthalten gültige Werte.</p>`;
+  }
+}
+
+/* ── Chart-Helfer ──────────────────────────────────────────────────────── */
+const nn = (v) => (Number.isNaN(v) ? null : v);
+const pos = (v) => (v > 0 ? v : null);
+const escapeHtml = (s) => String(s).replace(/[&<>"']/g,
+  (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+function destroyCharts() {
+  Object.values(charts).forEach((c) => c && c.destroy());
+  charts = {};
+}
+
+function ds(label, data, color, opt = {}) {
+  return {
+    label, data, borderColor: color,
+    backgroundColor: opt.fill ? `${color}1F` : 'transparent',
+    fill: !!opt.fill, tension: 0.22, pointRadius: 0, borderWidth: opt.fill ? 2 : 1.6,
+    borderDash: opt.dash || [], spanGaps: true, yAxisID: opt.axis || 'y',
+  };
+}
+
+/**
+ * Zeichnet ein Liniendiagramm. Ist Chart.js nicht verfuegbar (CDN blockiert,
+ * offline), wird der Platz durch einen Hinweis ersetzt statt eine Exception zu
+ * werfen — sonst risse ein fehlgeschlagener CDN-Abruf das gesamte Rendering
+ * inklusive Kennzahlen und Stromflussdiagramm mit.
+ */
+function line(canvasId, labels, datasets, opt = {}) {
+  const el = $(canvasId);
+  if (!el) return;
+  if (typeof Chart === 'undefined') {
+    const holder = el.closest('.chart-box');
+    if (holder && !holder.dataset.fallback) {
+      holder.dataset.fallback = '1';
+      holder.innerHTML = '<div class="empty">Diagrammbibliothek nicht erreichbar — Kennzahlen oben bleiben gültig.</div>';
+    }
+    return;
+  }
+  const axis = (title, color) => ({
+    ticks: { color: C.ink3, font: { family: "'JetBrains Mono'", size: 10 } },
+    grid: { color: C.hair },
+    title: { display: !!title, text: title, color: color || C.ink3, font: { family: "'JetBrains Mono'", size: 10 } },
+  });
+  const scales = {
+    x: {
+      ticks: {
+        color: C.ink3, maxTicksLimit: 7, autoSkip: true, maxRotation: 0,
+        font: { family: "'JetBrains Mono'", size: 9.5 },
+        callback(v) { const l = this.getLabelForValue(v); return l ? l.split(' ') : ''; },
+      },
+      grid: { color: C.hair, drawOnChartArea: false },
+    },
+    y: { ...axis(opt.yTitle), position: 'left', beginAtZero: !!opt.beginAtZero },
+  };
+  if (opt.yMin !== undefined) scales.y.min = opt.yMin;
+  if (opt.yMax !== undefined) scales.y.max = opt.yMax;
+  if (datasets.some((d) => d.yAxisID === 'y2')) {
+    scales.y2 = { ...axis(opt.y2Title), position: 'right', grid: { display: false } };
+  }
+  charts[canvasId] = new Chart(el, {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: opt.legend === false ? { display: false } : {
+          labels: {
+            color: C.ink3, font: { family: "'JetBrains Mono'", size: 10 },
+            boxWidth: 12, boxHeight: 2, usePointStyle: false,
+          },
+        },
+        tooltip: {
+          backgroundColor: '#0B1016', borderColor: '#2A3846', borderWidth: 1,
+          titleColor: '#F5F7FA', bodyColor: '#9BAABC',
+          titleFont: { family: "'JetBrains Mono'", size: 11 },
+          bodyFont: { family: "'JetBrains Mono'", size: 11 },
+          padding: 11, cornerRadius: 8, displayColors: true,
+        },
+      },
+      scales,
+    },
+  });
+}
+
+/* ── Laden ─────────────────────────────────────────────────────────────── */
+function setStatus(stale, text) {
+  const el = $('statusText');
+  el.className = `status-text${stale ? ' stale' : ''}`;
+  el.innerHTML = `<span class="live-dot${stale ? ' stale' : ''}"></span><span>${text}</span>`;
+  $('facetDot').className = `live-dot${stale ? ' stale' : ''}`;
+}
+
+async function fetchPlugs() {
+  try {
+    const res = await fetch(SMARTPLUGS_CSV_PATH, { cache: 'no-store' });
+    allPlugRows = res.ok ? parseSmartplugsCsv(await res.text()) : [];
+  } catch {
+    allPlugRows = [];
+  }
+}
+
+async function loadData() {
+  let rows;
+  try {
+    const res = await fetch(CSV_PATH, { cache: 'no-store' });
+    if (!res.ok) { setStatus(true, `Fehler ${res.status}: ${CSV_PATH} nicht erreichbar`); return; }
+    rows = parseCsv(await res.text());
+  } catch (err) {
+    setStatus(true, `Netzwerkfehler: ${err.message}`);
+    return;
+  }
+  if (!rows.length) { setStatus(true, 'Datei geladen, aber keine verwertbaren Zeilen'); return; }
+
+  allRows = rows;
+  await fetchPlugs();
+  // Rendering getrennt vom Abruf melden, damit ein Darstellungsfehler nicht
+  // faelschlich als Netzwerkproblem erscheint.
+  try {
+    render();
+  } catch (err) {
+    setStatus(true, `Darstellungsfehler: ${err.message}`);
+    return;
+  }
+  lastLoadTime = Date.now();
+
+  const f = vm.freshness;
+  const age = Math.round(f.ageMinutes ?? 0);
+  setStatus(f.stale,
+    f.stale
+      ? `Letzte Messung vor ${age} min — 3+ Abholungen verpasst`
+      : `${fmtCount(rows.length)} Zeilen · letzte Messung vor ${age} min`);
+  $('facetData').innerHTML = `<span class="live-dot${f.stale ? ' stale' : ''}" id="facetDot"></span> ${f.stale ? `${age} min alt` : `vor ${age} min`}`;
+}
+
+/* ── Start ─────────────────────────────────────────────────────────────── */
+$('versionPill').textContent = DASHBOARD_VERSION;
+$('facetVersion').textContent = DASHBOARD_VERSION;
+loadVersions();
+loadData();
+goToTab(0, false);
+
+setInterval(() => {
+  countdown--;
+  $('countdown').textContent = `Auto-Update in ${countdown}s`;
+  if (countdown <= 0) { countdown = REFRESH_SECONDS; loadData(); }
+}, 1000);
+
+const ro = new ResizeObserver(() => requestAnimationFrame(() => {
+  if (vm && vm.flow) { layoutNodes(); drawWires(); }
+  moveUnderline();
+}));
+ro.observe($('cluster'));
+ro.observe($('stage'));
+window.addEventListener('resize', moveUnderline);
+
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && sessionStorage.getItem('ecoflow_auth') === '1'
+      && Date.now() - lastLoadTime >= REFRESH_SECONDS * 1000) {
+    loadData();
+    countdown = REFRESH_SECONDS;
+  }
+});
+
+/* ── Zugriffskontrolle ─────────────────────────────────────────────────── */
+// Passwort-Hash ändern: echo -n "neuespasswort" | sha256sum
+const PW_HASH = '08ac8d7a13b3413d6b87e3c74185c8699437acabd4509c76002a037fd7d4138b';
+const AUTH_KEY = 'ecoflow_auth';
+
+async function sha256hex(str) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+$('gateForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const pw = $('gatePw').value;
+  if (await sha256hex(pw) === PW_HASH) {
+    sessionStorage.setItem(AUTH_KEY, '1');
+    $('gate').style.display = 'none';
+    requestAnimationFrame(() => { moveUnderline(); if (vm && vm.flow) { layoutNodes(); drawWires(); } });
+  } else {
+    const err = $('gateErr');
+    err.textContent = 'Falsches Passwort';
+    $('gatePw').value = '';
+    $('gatePw').focus();
+    setTimeout(() => { err.textContent = ''; }, 3000);
+  }
+});
+
+if (sessionStorage.getItem(AUTH_KEY) === '1') {
+  $('gate').style.display = 'none';
+} else {
+  $('gatePw').focus();
+}
+</script>
+</body>
+</html>
