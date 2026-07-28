@@ -132,24 +132,28 @@ button{font-family:inherit;}
 
 .command-body{display:grid;grid-template-rows:0fr;transition:grid-template-rows .3s cubic-bezier(.3,.7,0,1);}
 .command.open .command-body{grid-template-rows:1fr;}
-.command-body-inner{overflow:hidden;}
+/* overflow-y:auto (statt hidden) haelt den offenen Bereich zusaetzlich intern
+   scrollbar: die Kommandoleiste ist sticky (s. .command oben) — wird ihr
+   offener Inhalt hoeher als das Viewport, verschluckt das sonst alles unter
+   der Version-Gruppe (Datenaktualisierung, Zeitraum bleiben ausserhalb der
+   Stick-Position unerreichbar). Das max-height deckelt die Gesamthoehe der
+   Kommandoleiste dafuer verlaesslich unterhalb der Viewporthoehe. */
+.command-body-inner{overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;
+  max-height:min(64vh,560px);}
 .command-panels{border-top:1px solid var(--hair);padding:4px 16px 18px;}
 .cgroup{padding:16px 0 4px;}
 .cgroup + .cgroup{border-top:1px solid var(--hair);}
 .cgroup-label{margin-bottom:11px;}
 
-.vlist{display:flex;flex-direction:column;gap:2px;}
-.vitem{
-  display:flex;align-items:baseline;justify-content:space-between;gap:12px;
-  padding:9px 11px;border-radius:var(--r-sm);text-decoration:none;color:var(--ink);
-  border:1px solid transparent;transition:background .15s,border-color .15s;
+.vselect{
+  width:100%;font-family:var(--mono);font-size:12.5px;color:var(--ink);cursor:pointer;
+  background:var(--surface-1) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='11' viewBox='0 0 12 12' fill='none' stroke='%2363748A' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.5 4.5L6 8l3.5-3.5'/%3E%3C/svg%3E") no-repeat right 13px center;
+  border:1px solid var(--hair);border-radius:var(--r-sm);padding:10px 34px 10px 12px;
+  outline:none;appearance:none;-webkit-appearance:none;transition:border-color .15s;
 }
-.vitem:hover{background:var(--surface-2);border-color:var(--hair);}
-.vitem.current{background:var(--accent-soft);border-color:var(--accent-line);}
-.vitem .vtag{font-family:var(--mono);font-size:12.5px;font-weight:700;}
-.vitem.current .vtag{color:var(--accent);}
-.vitem .vtitle{font-size:12.5px;color:var(--ink-2);}
-.vitem .vdate{font-family:var(--mono);font-size:11px;color:var(--ink-3);flex-shrink:0;}
+.vselect:hover,.vselect:focus{border-color:var(--hair-strong);}
+.vselect:focus{border-color:var(--accent-line);}
+.vselect option{background:var(--surface-1);color:var(--ink);}
 .vhint{font-size:11.5px;color:var(--ink-3);line-height:1.6;margin-top:12px;padding-left:10px;
   border-left:2px solid var(--hair);}
 .batt-split{letter-spacing:-.012em;}
@@ -497,7 +501,7 @@ footer{margin-top:34px;padding-top:18px;border-top:1px solid var(--hair);
 
         <div class="cgroup">
           <div class="micro cgroup-label">Version</div>
-          <div class="vlist" id="versionList"></div>
+          <select class="vselect" id="versionSelect" aria-label="Dashboard-Version wählen"></select>
           <div class="vhint">Frühere Versionen lesen dieselben Messdaten und rechnen identisch —
             bei einem Problem mit der aktuellen Fassung kannst du jederzeit auf eine ältere wechseln
             und von dort zurück.</div>
@@ -784,7 +788,7 @@ import {
 } from './lib/layout.mjs';
 
 /* ── Konfiguration ─────────────────────────────────────────────────────── */
-const DASHBOARD_VERSION = 'v4.3.0';
+const DASHBOARD_VERSION = 'v4.3.1';
 const CSV_PATH = '../ecoflow_energie_daten.csv';
 const SMARTPLUGS_CSV_PATH = '../ecoflow_smartplugs_daten.csv';
 const VERSIONS_MANIFEST = './versions/manifest.json';
@@ -856,24 +860,29 @@ $('applyRange').addEventListener('click', () => {
 
 $('reloadBtn').addEventListener('click', () => { loadData(); countdown = REFRESH_SECONDS; });
 
-/* ── Versionsliste aus dem Manifest ────────────────────────────────────── */
+/* ── Versionsauswahl aus dem Manifest ──────────────────────────────────── */
 async function loadVersions() {
-  const list = $('versionList');
+  const sel = $('versionSelect');
   try {
     const res = await fetch(VERSIONS_MANIFEST, { cache: 'no-store' });
     if (!res.ok) throw new Error(String(res.status));
     const data = await res.json();
-    list.innerHTML = data.versions.map((v) => {
-      const inner = `<span class="vtag">v${v.version}</span> <span class="vtitle">${v.title}</span>`;
-      const date = `<span class="vdate">${v.date}${v.current ? ' · aktuell' : ''}</span>`;
-      return v.current || !v.path
-        ? `<div class="vitem${v.current ? ' current' : ''}"><span>${inner}</span>${date}</div>`
-        : `<a class="vitem" href="${v.path}">${`<span>${inner}</span>`}${date}</a>`;
+    sel.innerHTML = data.versions.map((v) => {
+      const label = `v${v.version} · ${v.date}${v.current ? ' · aktuell' : ''} — ${v.title}`;
+      // Nur Versionen mit archiviertem Pfad sind tatsaechlich anwaehlbar;
+      // die aktuelle sowie (noch) nicht archivierte Versionen bleiben rein
+      // informativ (s. versions/manifest.json).
+      const navigable = !!v.path && !v.current;
+      return `<option value="${navigable ? v.path : ''}"${v.current ? ' selected' : ''}${navigable ? '' : ' disabled'}>${escapeHtml(label)}</option>`;
     }).join('');
   } catch {
-    list.innerHTML = '<div class="vitem"><span class="vtitle">Versionsliste nicht verfügbar</span></div>';
+    sel.innerHTML = '<option>Versionsliste nicht verfügbar</option>';
   }
 }
+$('versionSelect').addEventListener('change', () => {
+  const path = $('versionSelect').value;
+  if (path) window.location.href = path;
+});
 
 /* ── Tabs: Reiter, Wischen, Indikator ──────────────────────────────────── */
 function moveUnderline() {

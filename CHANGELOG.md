@@ -9,6 +9,36 @@ die Versionierung folgt grob [Semantic Versioning](https://semver.org/lang/de/).
 
 ---
 
+## [4.3.1] — 2026-07-28
+
+### Fixed
+- **Kommandoleiste in mobiler Ansicht: nur die Versionsliste war klickbar**:
+  Die Kommandoleiste (`.command`) ist `position:sticky`, damit sie beim
+  Scrollen sichtbar bleibt. Solange der geöffnete Menübereich (Version +
+  Datenaktualisierung + Zeitraum zusammen) höher war als das Viewport,
+  blieb der über die Versionsliste hinausragende Rest (Datenaktualisierung,
+  Zeitraum) unerreichbar: ein gestickytes Element zeigt beim Scrollen immer
+  nur das eigene obere Ende, nicht den überschüssigen Inhalt darunter — auf
+  kurzen Mobil-Viewports betraf das praktisch die gesamte Versionsliste
+  (bislang eine ausgeschriebene Liste mit Titel + Datum je Version).
+  `.command-body-inner` bekommt jetzt ein `max-height` (`min(64vh,560px)`)
+  mit `overflow-y:auto` — der offene Menübereich bleibt dadurch verlässlich
+  unterhalb der Viewporthöhe und ist bei Bedarf zusätzlich intern
+  scrollbar, unabhängig vom Sticky-Verhalten der Leiste.
+- Die Versionsliste ist jetzt ein kompaktes `<select>`-Dropdown
+  (`#versionSelect`) statt einer ausgeschriebenen Liste — reduziert die
+  Höhe der „Version"-Gruppe deutlich und macht „Datenaktualisierung" und
+  „Zeitraum" auf den meisten Geräten schon ohne Scrollen sichtbar. Auswahl
+  einer archivierten Version navigiert wie zuvor per Link dorthin; die
+  aktuelle sowie (noch) nicht archivierte Versionen bleiben als
+  deaktivierte Einträge rein informativ (unverändert gegenüber der
+  bisherigen Liste).
+
+### Rückwärtskompatibilität
+- Rein clientseitige Markup-/CSS-/JS-Änderung an `docs/dashboard/index.html`
+  (Kommandoleiste); `versions/manifest.json`-Schema und die Berechnungs-
+  module (`lib/*.mjs`) sind unverändert.
+
 ## [4.3.0] — 2026-07-28
 
 ### Added
