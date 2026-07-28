@@ -9,6 +9,34 @@ die Versionierung folgt grob [Semantic Versioning](https://semver.org/lang/de/).
 
 ---
 
+## [4.3.0] — 2026-07-28
+
+### Added
+- **Netz-Knoten zeigt jetzt Netzbezug UND Einspeisung, analog zum Speicher**:
+  Bisher stellte der „Netz"-Knoten im Leistungsfluss-Diagramm (Tab 01) nur
+  den Netzbezug dar (`grid_cons_watt`); die unabhängig berechnete
+  Netzeinspeisung (`feedInPower()`) tauchte nur als Text-Hinweis unter
+  „Hausnetz — Gesamtverbrauch" auf, nicht am Netz-Knoten selbst. Der Knoten
+  zeigt jetzt — wie die Speicher-Karte beim Laden/Entladen — einen
+  vorzeichenbehafteten Saldo, ein Zustands-Pill („bezieht"/„speist ein") und,
+  wenn im gewählten Zeitraum beide Richtungen vorkamen, beide Anteile
+  getrennt (`↓ Einspeisung · ↑ Netzbezug`). Die Netz-Kante im Diagramm dreht
+  dafür ihre Richtung mit dem Saldo um (Netz → Hausnetz bzw. Hausnetz →
+  Netz), genau wie die Speicher-Kante mit dem Vorzeichen der
+  Batterieleistung.
+- `energy.mjs`: neue Funktionen `isGridExporting()` und `gridState()` sowie
+  die abgeleiteten Felder `gridNet`, `gridExporting`, `gridMagnitude`,
+  `gridState` in `flowModel()` und `flowCumulative()` — spiegeln die
+  bestehende Batterie-Vorzeichenkonvention (`charging`, `batteryMagnitude`,
+  `batteryState`) für das Netz.
+- `layout.mjs`: `buildEdges()` dreht die Netz-Kante jetzt analog zur
+  Speicher-Kante, wenn die Einspeisung den Netzbezug übersteigt.
+
+### Rückwärtskompatibilität
+- Bestehende Felder (`gridConsumption`, `feedIn`) bleiben unverändert; nur
+  neue Felder kamen hinzu. `houseBreakdown()`/`houseTotalWatt()` sind nicht
+  betroffen.
+
 ## [4.2.2] — 2026-07-27
 
 ### Fixed
