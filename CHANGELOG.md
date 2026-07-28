@@ -9,6 +9,64 @@ die Versionierung folgt grob [Semantic Versioning](https://semver.org/lang/de/).
 
 ---
 
+## [4.3.1] — 2026-07-28
+
+### Fixed
+- **Kommandoleiste in mobiler Ansicht: nur die Versionsliste war klickbar**:
+  Die Kommandoleiste (`.command`) ist `position:sticky`, damit sie beim
+  Scrollen sichtbar bleibt. Solange der geöffnete Menübereich (Version +
+  Datenaktualisierung + Zeitraum zusammen) höher war als das Viewport,
+  blieb der über die Versionsliste hinausragende Rest (Datenaktualisierung,
+  Zeitraum) unerreichbar: ein gestickytes Element zeigt beim Scrollen immer
+  nur das eigene obere Ende, nicht den überschüssigen Inhalt darunter — auf
+  kurzen Mobil-Viewports betraf das praktisch die gesamte Versionsliste
+  (bislang eine ausgeschriebene Liste mit Titel + Datum je Version).
+  `.command-body-inner` bekommt jetzt ein `max-height` (`min(64vh,560px)`)
+  mit `overflow-y:auto` — der offene Menübereich bleibt dadurch verlässlich
+  unterhalb der Viewporthöhe und ist bei Bedarf zusätzlich intern
+  scrollbar, unabhängig vom Sticky-Verhalten der Leiste.
+- Die Versionsliste ist jetzt ein kompaktes `<select>`-Dropdown
+  (`#versionSelect`) statt einer ausgeschriebenen Liste — reduziert die
+  Höhe der „Version"-Gruppe deutlich und macht „Datenaktualisierung" und
+  „Zeitraum" auf den meisten Geräten schon ohne Scrollen sichtbar. Auswahl
+  einer archivierten Version navigiert wie zuvor per Link dorthin; die
+  aktuelle sowie (noch) nicht archivierte Versionen bleiben als
+  deaktivierte Einträge rein informativ (unverändert gegenüber der
+  bisherigen Liste).
+
+### Rückwärtskompatibilität
+- Rein clientseitige Markup-/CSS-/JS-Änderung an `docs/dashboard/index.html`
+  (Kommandoleiste); `versions/manifest.json`-Schema und die Berechnungs-
+  module (`lib/*.mjs`) sind unverändert.
+
+## [4.3.0] — 2026-07-28
+
+### Added
+- **Netz-Knoten zeigt jetzt Netzbezug UND Einspeisung, analog zum Speicher**:
+  Bisher stellte der „Netz"-Knoten im Leistungsfluss-Diagramm (Tab 01) nur
+  den Netzbezug dar (`grid_cons_watt`); die unabhängig berechnete
+  Netzeinspeisung (`feedInPower()`) tauchte nur als Text-Hinweis unter
+  „Hausnetz — Gesamtverbrauch" auf, nicht am Netz-Knoten selbst. Der Knoten
+  zeigt jetzt — wie die Speicher-Karte beim Laden/Entladen — einen
+  vorzeichenbehafteten Saldo, ein Zustands-Pill („bezieht"/„speist ein") und,
+  wenn im gewählten Zeitraum beide Richtungen vorkamen, beide Anteile
+  getrennt (`↓ Einspeisung · ↑ Netzbezug`). Die Netz-Kante im Diagramm dreht
+  dafür ihre Richtung mit dem Saldo um (Netz → Hausnetz bzw. Hausnetz →
+  Netz), genau wie die Speicher-Kante mit dem Vorzeichen der
+  Batterieleistung.
+- `energy.mjs`: neue Funktionen `isGridExporting()` und `gridState()` sowie
+  die abgeleiteten Felder `gridNet`, `gridExporting`, `gridMagnitude`,
+  `gridState` in `flowModel()` und `flowCumulative()` — spiegeln die
+  bestehende Batterie-Vorzeichenkonvention (`charging`, `batteryMagnitude`,
+  `batteryState`) für das Netz.
+- `layout.mjs`: `buildEdges()` dreht die Netz-Kante jetzt analog zur
+  Speicher-Kante, wenn die Einspeisung den Netzbezug übersteigt.
+
+### Rückwärtskompatibilität
+- Bestehende Felder (`gridConsumption`, `feedIn`) bleiben unverändert; nur
+  neue Felder kamen hinzu. `houseBreakdown()`/`houseTotalWatt()` sind nicht
+  betroffen.
+
 ## [4.2.2] — 2026-07-27
 
 ### Fixed

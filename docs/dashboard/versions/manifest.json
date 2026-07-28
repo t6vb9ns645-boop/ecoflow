@@ -2,11 +2,25 @@
   "comment": "Index aller archivierten Dashboard-Versionen. Das Versionsmenue im Dashboard liest diese Datei. Beim Versions-Bump sind drei Schritte noetig: (1) den bisherigen Stand nach versions/vX.Y.Z/index.html kopieren, (2) darin die relativen CSV-Pfade um zwei Ebenen verlaengern (../ wird zu ../../../), (3) den Archiv-Balken mit Rueckweg auf ../../index.html einfuegen. Danach hier ergaenzen, neueste zuerst.",
   "versions": [
     {
+      "version": "4.3.1",
+      "date": "2026-07-28",
+      "title": "Kommandoleiste mobil: Version als Dropdown, restliche Optionen bleiben klickbar",
+      "path": null,
+      "current": true
+    },
+    {
+      "version": "4.3.0",
+      "date": "2026-07-28",
+      "title": "Netz-Knoten zeigt Netzbezug und Einspeisung (analog zum Speicher)",
+      "path": null,
+      "current": false
+    },
+    {
       "version": "4.2.2",
       "date": "2026-07-27",
       "title": "Smart-Plug Spannung/Temperatur: Skalierungsfehler (Faktor 10) behoben",
       "path": null,
-      "current": true
+      "current": false
     },
     {
       "version": "4.2.1",

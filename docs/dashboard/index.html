@@ -132,24 +132,28 @@ button{font-family:inherit;}
 
 .command-body{display:grid;grid-template-rows:0fr;transition:grid-template-rows .3s cubic-bezier(.3,.7,0,1);}
 .command.open .command-body{grid-template-rows:1fr;}
-.command-body-inner{overflow:hidden;}
+/* overflow-y:auto (statt hidden) haelt den offenen Bereich zusaetzlich intern
+   scrollbar: die Kommandoleiste ist sticky (s. .command oben) — wird ihr
+   offener Inhalt hoeher als das Viewport, verschluckt das sonst alles unter
+   der Version-Gruppe (Datenaktualisierung, Zeitraum bleiben ausserhalb der
+   Stick-Position unerreichbar). Das max-height deckelt die Gesamthoehe der
+   Kommandoleiste dafuer verlaesslich unterhalb der Viewporthoehe. */
+.command-body-inner{overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;
+  max-height:min(64vh,560px);}
 .command-panels{border-top:1px solid var(--hair);padding:4px 16px 18px;}
 .cgroup{padding:16px 0 4px;}
 .cgroup + .cgroup{border-top:1px solid var(--hair);}
 .cgroup-label{margin-bottom:11px;}
 
-.vlist{display:flex;flex-direction:column;gap:2px;}
-.vitem{
-  display:flex;align-items:baseline;justify-content:space-between;gap:12px;
-  padding:9px 11px;border-radius:var(--r-sm);text-decoration:none;color:var(--ink);
-  border:1px solid transparent;transition:background .15s,border-color .15s;
+.vselect{
+  width:100%;font-family:var(--mono);font-size:12.5px;color:var(--ink);cursor:pointer;
+  background:var(--surface-1) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='11' viewBox='0 0 12 12' fill='none' stroke='%2363748A' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.5 4.5L6 8l3.5-3.5'/%3E%3C/svg%3E") no-repeat right 13px center;
+  border:1px solid var(--hair);border-radius:var(--r-sm);padding:10px 34px 10px 12px;
+  outline:none;appearance:none;-webkit-appearance:none;transition:border-color .15s;
 }
-.vitem:hover{background:var(--surface-2);border-color:var(--hair);}
-.vitem.current{background:var(--accent-soft);border-color:var(--accent-line);}
-.vitem .vtag{font-family:var(--mono);font-size:12.5px;font-weight:700;}
-.vitem.current .vtag{color:var(--accent);}
-.vitem .vtitle{font-size:12.5px;color:var(--ink-2);}
-.vitem .vdate{font-family:var(--mono);font-size:11px;color:var(--ink-3);flex-shrink:0;}
+.vselect:hover,.vselect:focus{border-color:var(--hair-strong);}
+.vselect:focus{border-color:var(--accent-line);}
+.vselect option{background:var(--surface-1);color:var(--ink);}
 .vhint{font-size:11.5px;color:var(--ink-3);line-height:1.6;margin-top:12px;padding-left:10px;
   border-left:2px solid var(--hair);}
 .batt-split{letter-spacing:-.012em;}
@@ -265,6 +269,8 @@ button{font-family:inherit;}
 .pill.off{background:var(--surface-3);color:var(--ink-3);}
 .pill.charge{background:var(--ok-bg);color:var(--ok);}
 .pill.discharge{background:var(--accent-soft);color:var(--accent);}
+.pill.draw{background:rgba(232,121,249,.14);color:var(--grid);}
+.pill.feed{background:rgba(139,147,255,.14);color:var(--net);}
 .pill.idle{background:var(--surface-3);color:var(--ink-3);}
 
 .tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(152px,1fr));gap:10px;}
@@ -315,7 +321,6 @@ button{font-family:inherit;}
 .node.pv .glyph{background:var(--accent-soft);color:var(--solar);}
 .node.pv .nval{color:var(--solar);}
 
-.node.grid{width:108px;}
 .node.grid .glyph{background:rgba(232,121,249,.14);color:var(--grid);}
 .node.grid .nval{color:var(--grid);}
 
@@ -496,7 +501,7 @@ footer{margin-top:34px;padding-top:18px;border-top:1px solid var(--hair);
 
         <div class="cgroup">
           <div class="micro cgroup-label">Version</div>
-          <div class="vlist" id="versionList"></div>
+          <select class="vselect" id="versionSelect" aria-label="Dashboard-Version wählen"></select>
           <div class="vhint">Frühere Versionen lesen dieselben Messdaten und rechnen identisch —
             bei einem Problem mit der aktuellen Fassung kannst du jederzeit auf eine ältere wechseln
             und von dort zurück.</div>
@@ -591,7 +596,9 @@ footer{margin-top:34px;padding-top:18px;border-top:1px solid var(--hair);
                 <div class="glyph"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 1v4M4 6h8M2.5 9.3h11M1 12.7h14"/></svg></div>
                 <div class="micro nlabel">Netz</div>
                 <div class="nval" id="gridVal">—</div>
-                <div class="nfoot">nicht vom BKW gedeckt</div>
+                <div class="nfoot" id="gridFootVal">—</div>
+                <div class="nfoot batt-split" id="gridSplit" hidden></div>
+                <div class="pill idle" id="gridPill">—</div>
               </div>
             </div>
 
@@ -624,7 +631,8 @@ footer{margin-top:34px;padding-top:18px;border-top:1px solid var(--hair);
                   <i><span class="swatch" style="background:var(--solar)"></span>PV → Wechselrichter</i>
                   <i><span class="swatch" style="background:var(--batt)"></span>Wechselrichter ↔ Speicher</i>
                   <i><span class="swatch" style="background:var(--net)"></span>Wechselrichter → Hausnetz</i>
-                  <i><span class="swatch" style="background:var(--grid)"></span>Netz → Hausnetz</i>
+                  <i><span class="swatch" style="background:var(--grid)"></span>Netz → Hausnetz (Netzbezug)</i>
+                  <i><span class="swatch" style="background:var(--net)"></span>Hausnetz → Netz (Einspeisung)</i>
                   <i><span class="swatch" style="background:var(--base)"></span>Grundbedarf</i>
                 </div>
                 <p class="info-text"><strong>Topologie:</strong> Der Wechselrichter ist der zentrale Knoten des
@@ -635,9 +643,11 @@ footer{margin-top:34px;padding-top:18px;border-top:1px solid var(--hair);
                   wird als eigener Knoten „Netz" mit eigener Kante ins Hausnetz dargestellt.</p>
                 <p class="info-text"><strong>Netzeinspeisung:</strong> Umgekehrt kann der Wechselrichter auch mehr
                   Leistung ausgeben, als das Hausnetz gerade abnimmt — z. B. wenn die Smart Plugs wenig verbrauchen
-                  und der Speicher voll ist (nicht mehr lädt). Dieser Überschuss fließt ins öffentliche Netz und
-                  wird als Hinweis unter „Hausnetz — Gesamtverbrauch" angezeigt, zählt dort aber bewusst
-                  <strong>nicht</strong> als Verbraucher mit (siehe auch Sektion 02, „Einspeisung").</p>
+                  und der Speicher voll ist (nicht mehr lädt). Dieser Überschuss fließt ins öffentliche Netz. Analog
+                  zur Speicher-Kante dreht die Netz-Kante dafür ihre Richtung um: der Netz-Knoten zeigt dann
+                  „speist ein" statt „bezieht" und die Kante läuft vom Hausnetz zum Netz. Zusätzlich als Hinweis
+                  unter „Hausnetz — Gesamtverbrauch" markiert, zählt dort aber bewusst <strong>nicht</strong> als
+                  Verbraucher mit (siehe auch Sektion 02, „Einspeisung").</p>
                 <p class="info-text"><strong>Vorzeichen Speicher:</strong> <code>battery_power_watt &lt; 0</code>
                   bedeutet <em>laden</em>, <code>&gt; 0</code> bedeutet <em>entladen</em> (CHANGELOG [3.2.2],
                   an Messdaten verifiziert). Die Pfeilrichtung folgt dieser Konvention.</p>
@@ -778,7 +788,7 @@ import {
 } from './lib/layout.mjs';
 
 /* ── Konfiguration ─────────────────────────────────────────────────────── */
-const DASHBOARD_VERSION = 'v4.2.2';
+const DASHBOARD_VERSION = 'v4.3.1';
 const CSV_PATH = '../ecoflow_energie_daten.csv';
 const SMARTPLUGS_CSV_PATH = '../ecoflow_smartplugs_daten.csv';
 const VERSIONS_MANIFEST = './versions/manifest.json';
@@ -850,24 +860,29 @@ $('applyRange').addEventListener('click', () => {
 
 $('reloadBtn').addEventListener('click', () => { loadData(); countdown = REFRESH_SECONDS; });
 
-/* ── Versionsliste aus dem Manifest ────────────────────────────────────── */
+/* ── Versionsauswahl aus dem Manifest ──────────────────────────────────── */
 async function loadVersions() {
-  const list = $('versionList');
+  const sel = $('versionSelect');
   try {
     const res = await fetch(VERSIONS_MANIFEST, { cache: 'no-store' });
     if (!res.ok) throw new Error(String(res.status));
     const data = await res.json();
-    list.innerHTML = data.versions.map((v) => {
-      const inner = `<span class="vtag">v${v.version}</span> <span class="vtitle">${v.title}</span>`;
-      const date = `<span class="vdate">${v.date}${v.current ? ' · aktuell' : ''}</span>`;
-      return v.current || !v.path
-        ? `<div class="vitem${v.current ? ' current' : ''}"><span>${inner}</span>${date}</div>`
-        : `<a class="vitem" href="${v.path}">${`<span>${inner}</span>`}${date}</a>`;
+    sel.innerHTML = data.versions.map((v) => {
+      const label = `v${v.version} · ${v.date}${v.current ? ' · aktuell' : ''} — ${v.title}`;
+      // Nur Versionen mit archiviertem Pfad sind tatsaechlich anwaehlbar;
+      // die aktuelle sowie (noch) nicht archivierte Versionen bleiben rein
+      // informativ (s. versions/manifest.json).
+      const navigable = !!v.path && !v.current;
+      return `<option value="${navigable ? v.path : ''}"${v.current ? ' selected' : ''}${navigable ? '' : ' disabled'}>${escapeHtml(label)}</option>`;
     }).join('');
   } catch {
-    list.innerHTML = '<div class="vitem"><span class="vtitle">Versionsliste nicht verfügbar</span></div>';
+    sel.innerHTML = '<option>Versionsliste nicht verfügbar</option>';
   }
 }
+$('versionSelect').addEventListener('change', () => {
+  const path = $('versionSelect').value;
+  if (path) window.location.href = path;
+});
 
 /* ── Tabs: Reiter, Wischen, Indikator ──────────────────────────────────── */
 function moveUnderline() {
@@ -1031,8 +1046,37 @@ function renderFlow() {
       + `— netto ${net.value} ${net.unit} ${f.charging ? 'ins Speichern' : 'aus dem Speicher'}`;
   }
 
-  $('gridVal').innerHTML = flowValueHtml(f.gridConsumption);
-  $('nodeGrid').classList.toggle('idle', f.gridConsumption <= 0.5);
+  // Netzbezug und Einspeisung sind zwei unabhaengige Groessen (Sensor vs.
+  // berechneter Ueberschuss, s. gridState() in energy.mjs) und werden wie
+  // beim Speicher zu einem Saldo verrechnet: nval zeigt den Saldo mit
+  // Vorzeichen, der Pill den Zustand, der Split beide Anteile getrennt.
+  const gridMag = flowValueParts(f.gridMagnitude);
+  $('gridVal').innerHTML = `${f.gridExporting ? '−' : '+'}${gridMag.value}<span class="unit">${gridMag.unit}</span>`;
+
+  const gridFoot = $('gridFootVal');
+  gridFoot.textContent = f.gridState === 'speist ein' ? 'Einspeisung ins Netz'
+    : f.gridState === 'bezieht' ? 'Netzbezug — vom BKW nicht gedeckt'
+    : 'kein Austausch mit dem Netz';
+
+  const gridPill = $('gridPill');
+  gridPill.className = `pill ${f.gridState === 'bezieht' ? 'draw' : f.gridState === 'speist ein' ? 'feed' : 'idle'}`;
+  gridPill.textContent = f.gridState;
+
+  // Kamen im Zeitraum beide Richtungen vor, zusaetzlich getrennt ausweisen —
+  // sonst verrechnet der Saldo Netzbezug und Einspeisung zu einer Zahl
+  // (analog zu battSplit oben).
+  const gridSplit = $('gridSplit');
+  const showGridSplit = state.flowMode === 'period' && f.gridConsumption > 0.5 && f.feedIn > 0.5;
+  gridSplit.hidden = !showGridSplit;
+  if (showGridSplit) {
+    const einsp = fmtEnergy(f.feedIn);
+    const bezug = fmtEnergy(f.gridConsumption);
+    gridSplit.innerHTML = `<span style="color:var(--net)">↓ ${einsp.value} ${einsp.unit}</span>`
+      + ` <span style="color:var(--ink3)">·</span> `
+      + `<span style="color:var(--grid)">↑ ${bezug.value} ${bezug.unit}</span>`;
+    gridSplit.title = `Eingespeist ${einsp.value} ${einsp.unit}, bezogen ${bezug.value} ${bezug.unit} `
+      + `— netto ${gridMag.value} ${gridMag.unit} ${f.gridExporting ? 'Einspeisung' : 'Netzbezug'}`;
+  }
 
   const bd = vm.houseBreakdown;
 
@@ -1079,6 +1123,7 @@ function layoutNodes() {
   const put = (el, p) => { el.style.left = `${p.x}px`; el.style.top = `${p.y}px`; };
   $('nodeHub').style.width = $('nodeHub').style.height = `${L.sizes.hub}px`;
   $('nodeBatt').style.width = `${L.sizes.batt}px`;
+  $('nodeGrid').style.width = `${L.sizes.batt}px`;
   cluster.style.height = `${L.height}px`;
   put($('nodePv1'), L.pv1); put($('nodePv2'), L.pv2);
   put($('nodeHub'), L.hub); put($('nodeBatt'), L.batt);
@@ -1206,12 +1251,19 @@ function drawWires() {
   wire(hubBottom, hubTarget, { x: hubBottom.x, y: hMid }, { x: hubTarget.x, y: hMid },
     C.net, f.house, f.house > 0.5, false);
 
+  // Netz <-> Hausnetz: dreht die Richtung mit dem Saldo aus Netzbezug und
+  // Einspeisung, genau wie die Speicher-Kante oben mit dem Vorzeichen der
+  // Batterieleistung (s. gridExporting in energy.mjs).
   const gridEl = $('nodeGrid');
-  const gridBottom = anchor(gridEl, 'bottom');
-  const gridTarget = { x: houseTop.x - houseOffset, y: houseTop.y };
-  const gMid = gridBottom.y + (gridTarget.y - gridBottom.y) * 0.55;
-  wire(gridBottom, gridTarget, { x: gridBottom.x, y: gMid }, { x: gridTarget.x, y: gMid },
-    C.grid, f.gridConsumption, f.gridConsumption > 0.5, false);
+  const gridAnchor = anchor(gridEl, 'bottom');
+  const gridHouseTarget = { x: houseTop.x - houseOffset, y: houseTop.y };
+  const gMid = gridAnchor.y + (gridHouseTarget.y - gridAnchor.y) * 0.55;
+  const gridWatt = f.gridExporting ? f.feedIn : f.gridConsumption;
+  const [gA, gB] = f.gridExporting ? [gridHouseTarget, gridAnchor] : [gridAnchor, gridHouseTarget];
+  const [gc1, gc2] = f.gridExporting
+    ? [{ x: gridHouseTarget.x, y: gMid }, { x: gridAnchor.x, y: gMid }]
+    : [{ x: gridAnchor.x, y: gMid }, { x: gridHouseTarget.x, y: gMid }];
+  wire(gA, gB, gc1, gc2, f.gridExporting ? C.net : C.grid, gridWatt, gridWatt > 0.5, f.gridExporting);
 }
 
 /* ── Tab 02: Einzelwerte ───────────────────────────────────────────────── */

@@ -232,3 +232,42 @@ test('buildEdges behandelt fehlenden gridConsumption-Wert als 0', () => {
   assert.equal(grid.watt, 0);
   assert.equal(grid.active, false);
 });
+
+test('buildEdges dreht die Netzkante zum Netz hin, wenn die Einspeisung ueberwiegt', () => {
+  // PV-Ueberschuss (kein Netzbezug) -> die Kante muss vom Hausnetz zum Netz
+  // laufen statt umgekehrt, genau wie die Speicherkante beim Laden.
+  const edges = buildEdges({
+    pv1: 400, pv2: 0, batteryWatt: 0, batteryMagnitude: 0, charging: false, house: 40,
+    gridConsumption: 0, feedIn: 360,
+  });
+  const grid = edges.find((e) => e.id === 'grid');
+  assert.equal(grid.from, 'house');
+  assert.equal(grid.to, 'grid');
+  assert.equal(grid.watt, 360);
+  assert.equal(grid.active, true);
+  assert.notEqual(grid.from, 'hub');
+  assert.notEqual(grid.to, 'hub');
+});
+
+test('buildEdges laesst die Netzkante beim Netzbezug unveraendert, auch wenn Einspeisung vorliegt', () => {
+  // Netzbezug ueberwiegt (67 W) trotz kleiner Einspeisung (10 W) -> Kante zeigt weiterhin zum Hausnetz.
+  const edges = buildEdges({
+    pv1: 0, pv2: 0, batteryWatt: 0, batteryMagnitude: 0, charging: false, house: 0,
+    gridConsumption: 67, feedIn: 10,
+  });
+  const grid = edges.find((e) => e.id === 'grid');
+  assert.equal(grid.from, 'grid');
+  assert.equal(grid.to, 'house');
+  assert.equal(grid.watt, 67);
+});
+
+test('buildEdges wertet Netzbezug bei Gleichstand nicht als Einspeisung', () => {
+  const edges = buildEdges({
+    pv1: 0, pv2: 0, batteryWatt: 0, batteryMagnitude: 0, charging: false, house: 0,
+    gridConsumption: 30, feedIn: 30,
+  });
+  const grid = edges.find((e) => e.id === 'grid');
+  assert.equal(grid.from, 'grid');
+  assert.equal(grid.to, 'house');
+  assert.equal(grid.watt, 30);
+});
