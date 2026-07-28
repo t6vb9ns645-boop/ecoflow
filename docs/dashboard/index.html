@@ -776,6 +776,36 @@ footer{margin-top:34px;padding-top:18px;border-top:1px solid var(--hair);
   </footer>
 </div>
 
+<!--
+  Cache-Busting fuer alle lib/*.mjs-Module ueber eine Import Map, statt die
+  Importe in jeder .mjs-Datei einzeln zu versionieren: GitHub Pages liefert
+  sie mit `cache-control: max-age=600`. Ohne Busting bleibt ein im Browser
+  bereits gecachtes .mjs bis zu 10 Minuten gueltig, auch wenn zwischenzeitlich
+  ein neues Deployment landet — die frisch geladene index.html liefe dann
+  gegen eine veraltete Bibliothek (z. B. fehlten neue Felder aus energy.mjs,
+  obwohl die Seite bereits die neue Version anzeigt).
+  Die Import Map wirkt browserseitig auf JEDEN Import mit diesem Pfad, auch
+  auf die internen lib/*.mjs → lib/*.mjs-Importe (z. B. viewmodel.mjs →
+  energy.mjs) — deren Quelltext bleibt dadurch unveraendert (kein `?v=` in
+  den .mjs-Dateien selbst). Das ist bewusst so: Node lädt dieselbe Datei
+  unter zwei verschiedenen Query-Strings sonst als zwei getrennte Modul-
+  Instanzen, was die Coverage-Messung der Tests verfälscht (getestet, siehe
+  CHANGELOG). Der `?v=`-Wert MUSS bei jedem Versions-Bump zusammen mit
+  DASHBOARD_VERSION unten aktualisiert werden.
+-->
+<script type="importmap">
+{
+  "imports": {
+    "./lib/csv.mjs": "./lib/csv.mjs?v=4.3.2",
+    "./lib/format.mjs": "./lib/format.mjs?v=4.3.2",
+    "./lib/energy.mjs": "./lib/energy.mjs?v=4.3.2",
+    "./lib/filters.mjs": "./lib/filters.mjs?v=4.3.2",
+    "./lib/viewmodel.mjs": "./lib/viewmodel.mjs?v=4.3.2",
+    "./lib/layout.mjs": "./lib/layout.mjs?v=4.3.2",
+    "./lib/plugs.mjs": "./lib/plugs.mjs?v=4.3.2"
+  }
+}
+</script>
 <script type="module">
 import { parseCsv, parseSmartplugsCsv } from './lib/csv.mjs';
 import { fmtLabel, fmtW, fmtEnergy, fmtMeasure, fmtCount, rssiQuality } from './lib/format.mjs';
@@ -788,7 +818,7 @@ import {
 } from './lib/layout.mjs';
 
 /* ── Konfiguration ─────────────────────────────────────────────────────── */
-const DASHBOARD_VERSION = 'v4.3.1';
+const DASHBOARD_VERSION = 'v4.3.2';
 const CSV_PATH = '../ecoflow_energie_daten.csv';
 const SMARTPLUGS_CSV_PATH = '../ecoflow_smartplugs_daten.csv';
 const VERSIONS_MANIFEST = './versions/manifest.json';
