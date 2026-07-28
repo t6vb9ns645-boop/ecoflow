@@ -2,17 +2,20 @@
  * Geometrie des Stromfluss-Diagramms (Hub-und-Speiche).
  *
  * Topologie — der Wechselrichter ist der zentrale Knoten fürs Balkonkraftwerk,
- * das Netz speist das Hausnetz aber DIREKT und unabhaengig davon:
+ * das Netz hängt aber DIREKT und unabhaengig davon am Hausnetz:
  *     PV1 ─┐
  *          ├─> Wechselrichter <──> Speicher
  *     PV2 ─┘         │
  *                    v
- *     Netz ────> Hausnetz
+ *     Netz <────> Hausnetz
  *
  * Der Speicher hängt ausschliesslich am Wechselrichter (nicht am Hausnetz).
  * Das Hausnetz wird primär vom Wechselrichter versorgt, zusätzlich aber auch
  * direkt aus dem Stromnetz — immer dann, wenn PV/Speicher den Bedarf (z. B.
  * der Smart Plugs) nicht vollständig decken können (`grid_cons_watt`).
+ * Umgekehrt kann Ueberschuss auch vom Hausnetz zurueck ins Netz fliessen
+ * (Einspeisung, s. `feedInPower()`) — die Netz-Kante ist daher wie die
+ * Speicher-Kante bidirektional, s. `buildEdges()`.
  *
  * Positionen sind Mittelpunkte in Pixeln relativ zum Container. Die Abstände
  * werden aus den TATSÄCHLICHEN halben Kantenlängen der Karten berechnet, damit
@@ -143,15 +146,21 @@ export function edgeControlPoints(a, b) {
 }
 
 /**
- * Die vier Kanten des Diagramms mit Richtung und Aktivitätszustand.
+ * Die fünf Kanten des Diagramms mit Richtung und Aktivitätszustand.
  * Die Speicher-Kante dreht ihre Richtung mit dem Vorzeichen:
  * lädt -> Wechselrichter zum Speicher, entlädt -> Speicher zum Wechselrichter.
  *
  * Die Netz-Kante ist die einzige, die nicht am Wechselrichter hängt — sie
- * versorgt das Hausnetz direkt, wenn PV/Speicher den Bedarf nicht decken
- * (`flow.gridConsumption`, Feld `grid_cons_watt`).
+ * verbindet das Netz direkt mit dem Hausnetz. Sie dreht ihre Richtung
+ * analog zur Speicher-Kante mit dem Saldo aus Netzbezug (`flow.gridConsumption`,
+ * Feld `grid_cons_watt`) und Einspeisung (`flow.feedIn`, s. `feedInPower()`):
+ * überwiegt die Einspeisung, läuft sie vom Hausnetz zum Netz statt umgekehrt.
  */
 export function buildEdges(flow) {
+  const gridConsumption = Number(flow.gridConsumption) || 0;
+  const feedIn = Number(flow.feedIn) || 0;
+  const exporting = feedIn > gridConsumption;
+  const gridWatt = exporting ? feedIn : gridConsumption;
   return [
     { id: 'pv1', from: 'pv1', to: 'hub', watt: flow.pv1, active: isEdgeActive(flow.pv1), color: 'solar' },
     { id: 'pv2', from: 'pv2', to: 'hub', watt: flow.pv2, active: isEdgeActive(flow.pv2), color: 'solar' },
@@ -166,10 +175,10 @@ export function buildEdges(flow) {
     { id: 'house', from: 'hub', to: 'house', watt: flow.house, active: isEdgeActive(flow.house), color: 'house' },
     {
       id: 'grid',
-      from: 'grid',
-      to: 'house',
-      watt: flow.gridConsumption || 0,
-      active: isEdgeActive(flow.gridConsumption || 0),
+      from: exporting ? 'house' : 'grid',
+      to: exporting ? 'grid' : 'house',
+      watt: gridWatt,
+      active: isEdgeActive(gridWatt),
       color: 'grid',
     },
   ];

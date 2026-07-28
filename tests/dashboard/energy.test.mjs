@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   isCharging, chargePower, dischargePower, batteryState,
+  isGridExporting, gridState,
   pvTotal, houseLoad, feedInPower, calcEnergyWh, cumulativeEnergyWh,
   energyTotals, flowModel, flowCumulative, houseBreakdown, houseTotalWatt, batteryFlows, MAX_GAP_HOURS,
 } from '../../docs/dashboard/lib/energy.mjs';
@@ -33,6 +34,21 @@ test('batteryState benennt den Zustand', () => {
   assert.equal(batteryState(16), 'entlädt');
   assert.equal(batteryState(0), 'inaktiv');
   assert.equal(batteryState(NaN), 'inaktiv');
+});
+
+/* ── Vorzeichenkonvention Netz (analog zur Batterie) ────────────────────── */
+
+test('isGridExporting ist wahr, wenn die Einspeisung den Netzbezug uebersteigt', () => {
+  assert.equal(isGridExporting(0, 67), true);
+  assert.equal(isGridExporting(67, 0), false);
+  assert.equal(isGridExporting(30, 30), false); // gleichauf zaehlt als Bezug, nicht Einspeisung
+});
+
+test('gridState benennt den Zustand', () => {
+  assert.equal(gridState(67, 0), 'bezieht');
+  assert.equal(gridState(0, 67), 'speist ein');
+  assert.equal(gridState(0, 0), 'inaktiv');
+  assert.equal(gridState(NaN, NaN), 'inaktiv');
 });
 
 /* ── Momentanleistungen ─────────────────────────────────────────────────── */
@@ -195,6 +211,33 @@ test('flowModel klemmt negativen Netzverbrauch auf 0', () => {
   assert.equal(flowModel({ ...LIVE_ROW, grid_cons_watt: -5 }).gridConsumption, 0);
 });
 
+test('flowModel bildet den Netzbezug-Fall korrekt ab (Balkonkraftwerk deckt Bedarf nicht)', () => {
+  // Realer Fall (s. houseBreakdown-Tests): keine PV, kein Speicherumsatz,
+  // WR liefert 0 W ans Hausnetz, Netz deckt 67 W -> keine Einspeisung moeglich.
+  const row = {
+    pv1_watt: 0, pv2_watt: 0, ac_house_watt: 0, battery_power_watt: 0,
+    inv_to_plug_watt: 0, permanent_watt: 0, grid_cons_watt: 67, battery_soc_percent: 70,
+  };
+  const f = flowModel(row);
+  assert.equal(f.gridConsumption, 67);
+  assert.equal(f.feedIn, 0);
+  assert.equal(f.gridExporting, false);
+  assert.equal(f.gridMagnitude, 67);
+  assert.equal(f.gridState, 'bezieht');
+  assert.equal(f.gridNet, 67);
+});
+
+test('flowModel bildet den Einspeisung-Fall korrekt ab (PV-Ueberschuss)', () => {
+  const row = { pv1_watt: 300, pv2_watt: 300, inv_to_plug_watt: 50, permanent_watt: 10, battery_power_watt: -100, grid_cons_watt: 0 };
+  const f = flowModel(row);
+  assert.equal(f.feedIn, 440);
+  assert.equal(f.gridConsumption, 0);
+  assert.equal(f.gridExporting, true);
+  assert.equal(f.gridMagnitude, 440);
+  assert.equal(f.gridState, 'speist ein');
+  assert.equal(f.gridNet, -440);
+});
+
 /* ── Kumuliertes Flussmodell (Σ-Zeitraum-Modus) ─────────────────────────── */
 
 const H = 1 / 30; // 2 Minuten in Stunden
@@ -275,6 +318,22 @@ test('flowCumulative klemmt negativen Netzverbrauch auf 0', () => {
     ['2026-07-25T12:02:00Z', 0, 0, 0, 0, 0, 0, -5, 50],
   ]);
   assert.equal(flowCumulative(rows).gridConsumption, 0);
+});
+
+test('flowCumulative verrechnet Netzbezug und Einspeisung ueber den Zeitraum zum Saldo', () => {
+  // Intervall 1 bezieht 60 W vom Netz (kein PV-Ueberschuss), Intervall 2
+  // speist 360 W ein (PV-Ueberschuss, kein Netzbezug mehr).
+  const rows = periodRows([
+    ['2026-07-25T12:00:00Z', 0, 0, 0, 0, 10, 10, 60, 50],
+    ['2026-07-25T12:02:00Z', 200, 200, 0, 0, 30, 10, 0, 50],
+    ['2026-07-25T12:04:00Z', 200, 200, 0, 0, 30, 10, 0, 50],
+  ]);
+  const f = flowCumulative(rows);
+  assert.ok(Math.abs(f.gridConsumption - 60 * H) < 1e-9);
+  assert.ok(Math.abs(f.feedIn - 360 * H) < 1e-9);
+  assert.equal(f.gridExporting, true, 'Einspeisung ueberwiegt ueber den Gesamtzeitraum');
+  assert.ok(Math.abs(f.gridMagnitude - (360 - 60) * H) < 1e-9);
+  assert.equal(f.gridState, 'speist ein');
 });
 
 test('flowCumulative ist bei leeren/einzelnen Zeilen ueberall 0 bzw. 0 SOC', () => {

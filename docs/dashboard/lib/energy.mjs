@@ -37,6 +37,30 @@ export function batteryState(batteryPowerWatt) {
   return v < 0 ? 'lädt' : 'entlädt';
 }
 
+/**
+ * ── Vorzeichenkonvention Netz ────────────────────────────────────────────
+ * Anders als bei der Batterie gibt es beim Netz kein einzelnes Rohsignal mit
+ * Vorzeichen: `gridConsumption` (Sensor `grid_cons_watt`) und `feedIn`
+ * (berechnet, s. `feedInPower()`) werden unabhängig ermittelt. `gridNet`
+ * (= gridConsumption − feedIn) verrechnet beide zu EINER Zahl, analog zum
+ * Speicher-Netto: `gridNet > 0` => Netzbezug (Energie fliesst Netz ->
+ * Hausnetz), `gridNet < 0` => Einspeisung (Energie fliesst Wechselrichter ->
+ * Netz).
+ */
+
+/** true, wenn das Netz per Saldo Energie aufnimmt (Einspeisung > Netzbezug). */
+export function isGridExporting(gridConsumptionWatt, feedInWatt) {
+  return num(feedInWatt) > num(gridConsumptionWatt);
+}
+
+/** Zustands-Label für die Netz-Anzeige, analog zu batteryState(). */
+export function gridState(gridConsumptionWatt, feedInWatt) {
+  const c = num(gridConsumptionWatt);
+  const f = num(feedInWatt);
+  if (c <= 0 && f <= 0) return 'inaktiv';
+  return f > c ? 'speist ein' : 'bezieht';
+}
+
 /** NaN-sicherer Zahlenwert mit 0 als Ersatz. */
 function num(v) {
   const n = Number(v);
@@ -156,6 +180,13 @@ export function batteryFlows(rows) {
  */
 export function flowModel(row) {
   const batt = num(row.battery_power_watt);
+  const gridConsumption = Math.max(0, num(row.grid_cons_watt));
+  // PV-Ueberschuss, der weder Haus noch Speicher zufliesst (s. feedInPower()).
+  // Tritt v. a. auf, wenn die Smart Plugs wenig verbrauchen UND der Speicher
+  // voll ist (nicht mehr laedt) -- dieser Anteil geht ins oeffentliche Netz,
+  // nicht in den Hausverbrauch (s. houseBreakdown()).
+  const feedIn = feedInPower(row);
+  const gridNet = gridConsumption - feedIn;
   return {
     pv1: num(row.pv1_watt),
     pv2: num(row.pv2_watt),
@@ -168,12 +199,14 @@ export function flowModel(row) {
     house: num(row.ac_house_watt),
     toPlugs: num(row.inv_to_plug_watt),
     baseLoad: num(row.permanent_watt),
-    gridConsumption: Math.max(0, num(row.grid_cons_watt)),
-    // PV-Ueberschuss, der weder Haus noch Speicher zufliesst (s. feedInPower()).
-    // Tritt v. a. auf, wenn die Smart Plugs wenig verbrauchen UND der Speicher
-    // voll ist (nicht mehr laedt) -- dieser Anteil geht ins oeffentliche Netz,
-    // nicht in den Hausverbrauch (s. houseBreakdown()).
-    feedIn: feedInPower(row),
+    gridConsumption,
+    feedIn,
+    // Netzbezug und Einspeisung zu einer Zahl verrechnet, analog zum
+    // Speicher-Netto (s. „Vorzeichenkonvention Netz" oben).
+    gridNet,
+    gridExporting: isGridExporting(gridConsumption, feedIn),
+    gridMagnitude: Math.abs(gridNet),
+    gridState: gridState(gridConsumption, feedIn),
   };
 }
 
@@ -202,6 +235,10 @@ export function flowCumulative(rows) {
     if (!Number.isNaN(v)) { soc = v; break; }
   }
 
+  const gridConsumption = calcEnergyWh(rows, (r) => Math.max(0, num(r.grid_cons_watt)));
+  const feedIn = calcEnergyWh(rows, feedInPower);
+  const gridNet = gridConsumption - feedIn;
+
   return {
     pv1: calcEnergyWh(rows, (r) => num(r.pv1_watt)),
     pv2: calcEnergyWh(rows, (r) => num(r.pv2_watt)),
@@ -216,8 +253,12 @@ export function flowCumulative(rows) {
     house: calcEnergyWh(rows, (r) => num(r.ac_house_watt)),
     toPlugs: calcEnergyWh(rows, (r) => num(r.inv_to_plug_watt)),
     baseLoad: calcEnergyWh(rows, (r) => num(r.permanent_watt)),
-    gridConsumption: calcEnergyWh(rows, (r) => Math.max(0, num(r.grid_cons_watt))),
-    feedIn: calcEnergyWh(rows, feedInPower),
+    gridConsumption,
+    feedIn,
+    gridNet,
+    gridExporting: isGridExporting(gridConsumption, feedIn),
+    gridMagnitude: Math.abs(gridNet),
+    gridState: gridState(gridConsumption, feedIn),
   };
 }
 
