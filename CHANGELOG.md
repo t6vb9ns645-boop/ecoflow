@@ -9,6 +9,40 @@ die Versionierung folgt grob [Semantic Versioning](https://semver.org/lang/de/).
 
 ---
 
+## [4.3.2] — 2026-07-28
+
+### Fixed
+- **Netzeinspeisung wurde live real angezeigt als "kein Austausch mit dem
+  Netz"**: Bei vollem Speicher (100 %, inaktiv) und PV-Überschuss (z. B.
+  383 W Erzeugung, 19 W Hausverbrauch) zeigte der „Hausnetz —
+  Gesamtverbrauch"-Hinweis korrekt „365 W eingespeist", der Netz-Knoten
+  selbst aber „+—" und „kein Austausch mit dem Netz" statt „speist ein".
+  Ursache: GitHub Pages liefert `lib/*.mjs` mit `cache-control:
+  max-age=600`. Lud ein Browser die Seite kurz nach einem Deployment neu,
+  konnte `index.html` bereits die neue Version sein, während `lib/energy.mjs`
+  — insbesondere die in v4.3.0 hinzugefügten Felder `gridExporting`,
+  `gridMagnitude`, `gridState` — noch aus dem HTTP-Cache einer älteren
+  Fassung kam. Die UI griff dann auf `undefined`-Felder zu, was durch
+  `fmtW()`/`? :`-Fallbacks lautlos zu „—"/„kein Austausch" statt zu einem
+  sichtbaren Fehler wurde.
+- Cache-Busting per **Import Map** (`<script type="importmap">` in
+  `index.html`) statt versionierter `?v=`-Query direkt in den `.mjs`-Dateien:
+  die Map wirkt auf JEDEN Import mit passendem Pfad, auch auf die internen
+  `lib/*.mjs → lib/*.mjs`-Importe (z. B. `viewmodel.mjs → energy.mjs`), ohne
+  deren Quelltext zu ändern. Ein erster Versuch mit `?v=`-Queries direkt in
+  den Importen jeder `.mjs`-Datei wurde verworfen: Node lädt dieselbe Datei
+  unter zwei verschiedenen Query-Strings als zwei getrennte Modul-Instanzen,
+  was `test:coverage` verfälschte (`csv.mjs`/`filters.mjs` fielen unter die
+  85-%-Schwelle, `energy.mjs` schwankte je nach Testreihenfolge zwischen
+  93 % und 100 %).
+- Per Playwright verifiziert: alle sieben `lib/*.mjs`-Requests (sowohl die
+  direkten aus `index.html` als auch die internen aus `viewmodel.mjs`/
+  `plugs.mjs`) tragen jetzt `?v=4.3.2` und werden je genau einmal geladen.
+
+### Rückwärtskompatibilität
+- Rein clientseitige Markup-Änderung (Import Map). `lib/*.mjs`-Quelltext,
+  `versions/manifest.json`-Schema und alle Testdateien sind unverändert.
+
 ## [4.3.1] — 2026-07-28
 
 ### Fixed
