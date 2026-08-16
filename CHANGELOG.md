@@ -9,6 +9,28 @@ die Versionierung folgt grob [Semantic Versioning](https://semver.org/lang/de/).
 
 ---
 
+## [Unreleased]
+
+### Added
+- **Compliance-Bewertung gegen ISO 27001 & SOC 2**
+  (`docs/compliance/ISO27001-SOC2-Bewertung.md`): Prüfung des Repositories,
+  der Actions-Pipeline, des Collectors und des Dashboards gegen die
+  technischen Controls aus ISO/IEC 27001:2022 Annex A und die SOC-2 Trust
+  Services Criteria, mit priorisierter Maßnahmenliste. Reine Dokumentation —
+  keine Funktions- oder Verhaltensänderung.
+
+  Drei kritische Befunde, jeweils am System verifiziert: (1) Die Messdaten
+  sind über `raw.githubusercontent.com` ohne Authentifizierung abrufbar
+  (HTTP 200); die Smart-Plug-CSV enthält raumbezogene Klarnamen im
+  2-Minuten-Raster und gibt damit Anwesenheits- und Schlafzeiten preis.
+  (2) Der Passwortschutz des Dashboards prüft ausschließlich clientseitig
+  gegen einen ungesalzenen SHA-256-Hash im öffentlichen Quelltext und ist
+  über `sessionStorage`, den direkten CSV-Abruf oder Offline-Brute-Force
+  umgehbar. (3) `main` ist ungeschützt und `auto-pr-merge.yml` merged ohne
+  Review und ohne bestandene Pflicht-Checks.
+
+---
+
 ## [4.3.2] — 2026-07-28
 
 ### Fixed
